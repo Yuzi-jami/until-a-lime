@@ -1,0 +1,27 @@
+{
+  "Application": "QQ",
+  "Version": "9.9.27.45758",
+  "SignatureStatus": "Valid",
+  "SignedByTencent": true,
+  "Samples": [
+    {
+      "Sample": 1,
+      "Status": "Observed",
+      "EditCount": 0,
+      "Capabilities": []
+    },
+    {
+      "Sample": 2,
+      "Status": "Observed",
+      "EditCount": 0,
+      "Capabilities": []
+    },
+    {
+      "Sample": 3,
+      "Status": "Observed",
+      "EditCount": 0,
+      "Capabilities": []
+    }
+  ],
+  "Note": "Read-only capabilities; no names, values, titles or screenshots collected. Not authorization to fill."
+}

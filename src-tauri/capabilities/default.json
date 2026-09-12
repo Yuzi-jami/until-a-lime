@@ -1,0 +1,1 @@
+{"identifier":"main-preview","description":"Main demo window may listen for local navigation events; no filesystem, shell, clipboard or input permissions","windows":["main"],"permissions":["core:event:allow-listen","core:event:allow-unlisten"]}

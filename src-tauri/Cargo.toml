@@ -1,0 +1,27 @@
+[package]
+name = "until-a-lime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "until_a_lime_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+argon2 = { version = "0.5", features = ["zeroize"] }
+chacha20poly1305 = "0.10"
+zeroize = "1"
+rand_core = { version = "0.6", features = ["getrandom"] }
+tempfile = "3"
+rfd = "0.15"
+
+[target."cfg(windows)".dependencies]
+clipboard-win = "5"

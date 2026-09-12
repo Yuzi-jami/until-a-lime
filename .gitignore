@@ -1,0 +1,11 @@
+/target/
+/node_modules/
+/dist/
+/.tools/
+/rustup-init.exe
+*.log
+*.vault
+*.vault.bak
+.env
+.env.*
+!.env.example

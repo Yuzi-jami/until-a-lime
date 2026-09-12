@@ -1,0 +1,3 @@
+const http=require('node:http');const fs=require('node:fs');const path=require('node:path');const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/orange-mark.svg':'orange-mark.svg'};http.createServer((req,res)=>{const name=files[req.url.split('?')[0]];if(!name){res.writeHead(404);res.end('Not found');return}res.setHeader('Content-Type',name.endsWith('.svg')?'image/svg+xml':name.endsWith('.css')?'text/css; charset=utf-8':name.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8');res.setHeader('Cache-Control','no-store');fs.createReadStream(path.join(__dirname,name)).pipe(res)}).listen(4173,'127.0.0.1',()=>console.log('Lime design preview: http://127.0.0.1:4173'));
+
+
