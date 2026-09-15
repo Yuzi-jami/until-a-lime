@@ -66,6 +66,7 @@ impl VaultService {
         }
         if Self::expired(&state) {
             state.vault = None;
+            state.import_file = None;
             state.epoch = state.epoch.wrapping_add(1);
             return true;
         }
@@ -81,6 +82,7 @@ impl VaultService {
         }
         if Self::expired(&state) {
             state.vault = None;
+            state.import_file = None;
             state.epoch = state.epoch.wrapping_add(1);
         }
         let vault = state.vault.as_mut().ok_or("密码库已锁定。")?;
@@ -106,9 +108,9 @@ impl VaultService {
             state.epoch
         };
         let result = if restore {
-            Vault::restore(self.path.clone(), &password)
+            Vault::prepare_restore(self.path.clone(), &password)
         } else if create {
-            Vault::create(self.path.clone(), &password)
+            Vault::prepare_create(self.path.clone(), &password)
         } else {
             Vault::open(self.path.clone(), &password)
         };
@@ -117,7 +119,14 @@ impl VaultService {
         if state.epoch != epoch {
             return Err("解锁已取消，请重试。".into());
         }
-        let vault = result?;
+        let prepared = result?;
+        let vault = if restore {
+            prepared.commit_restore()?
+        } else if create {
+            prepared.commit_create()?
+        } else {
+            prepared
+        };
         let entries = vault.list();
         state.vault = Some(vault);
         state.last = SystemTime::now();
@@ -130,6 +139,7 @@ impl VaultService {
         let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
         if Self::expired(&state) {
             state.vault = None;
+            state.import_file = None;
             state.epoch = state.epoch.wrapping_add(1);
         }
         if state.busy {
@@ -469,7 +479,86 @@ mod tests {
         }
         service.lock();
         assert!(thread.join().unwrap().is_err());
+        assert!(
+            !service.path.exists(),
+            "cancelled creation must not write a vault"
+        );
         assert!(service.access(|vault| Ok(vault.list())).is_err());
+    }
+    #[test]
+    fn lock_cancels_restore_without_changing_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vault.lime");
+        Vault::create(path.clone(), "test-master-password-only").unwrap();
+        std::fs::copy(&path, path.with_extension("lime.bak")).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let service = VaultService::new(path.clone());
+        let worker = service.clone();
+        let thread = std::thread::spawn(move || {
+            worker.authenticate(
+                Zeroizing::new("test-master-password-only".into()),
+                false,
+                true,
+            )
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !service.state.lock().unwrap().busy {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        service.lock();
+        assert!(thread.join().unwrap().is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+    #[test]
+    fn lock_cancels_password_change_and_import_without_disk_commit() {
+        for import in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("vault.lime");
+            let service = VaultService::new(path.clone());
+            service
+                .authenticate(
+                    Zeroizing::new("test-master-password-only".into()),
+                    true,
+                    false,
+                )
+                .unwrap();
+            let before = std::fs::read(&path).unwrap();
+            let source = dir.path().join("source.lime");
+            std::fs::copy(&path, &source).unwrap();
+            service.state.lock().unwrap().import_file = Some((
+                "mock-ticket".into(),
+                source,
+                std::time::Instant::now() + Duration::from_secs(60),
+            ));
+            let worker = service.clone();
+            let thread = std::thread::spawn(move || {
+                if import {
+                    worker
+                        .import(
+                            "mock-ticket",
+                            Zeroizing::new("test-master-password-only".into()),
+                        )
+                        .map(|_| ())
+                } else {
+                    worker.change_password(
+                        Zeroizing::new("test-master-password-only".into()),
+                        Zeroizing::new("different-test-password".into()),
+                    )
+                }
+            });
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !service.state.lock().unwrap().busy {
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+            service.lock();
+            assert!(thread.join().unwrap().is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            assert!(service.state.lock().unwrap().import_file.is_none());
+            assert!(service.access(|vault| Ok(vault.list())).is_err());
+        }
     }
     #[test]
     fn locked_service_rejects_reads_and_idle_expiry_drops_key() {
@@ -486,9 +575,15 @@ mod tests {
         assert!(service.access(|vault| Ok(vault.list())).is_ok());
         {
             let mut state = service.state.lock().unwrap();
+            state.import_file = Some((
+                "stale-ticket".into(),
+                dir.path().join("unused.lime"),
+                std::time::Instant::now() + Duration::from_secs(600),
+            ));
             state.last = SystemTime::now() - Duration::from_secs(301);
         }
         assert!(service.check());
+        assert!(service.state.lock().unwrap().import_file.is_none());
         assert!(service.access(|vault| Ok(vault.list())).is_err());
     }
 }

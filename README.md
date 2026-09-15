@@ -41,3 +41,11 @@ pwsh -NoProfile -File scripts/Start-LimeDesktop.ps1
 - [蓝屏事件记录](docs/incident-2026-09-10.md)
 
 `crates/windows-validation` 为独立历史实验，默认 Cargo 目标已切换为桌面工程。不要将旧输入验证脚本作为本项目常规测试入口。公开发布前还需完成许可证选择、贡献指南和安全反馈流程。
+
+## 基础交付构建
+
+统一检查：`pwsh -NoProfile -File scripts/Check-Desktop.ps1`。debug：`npm.cmd run tauri -- build --debug --no-bundle`；release：`npm.cmd run tauri -- build --no-bundle`。启动脚本默认 Debug，发行版使用 `scripts/Start-LimeDesktop.ps1 -Configuration Release`；生命周期脚本支持相同参数，仅核验隐藏与单实例，不证明仍解锁。独立 EXE 不依赖 Vite，关闭自行打开的构建终端不会主动退出独立启动的应用。debug/release 均使用 GUI 子系统，运行时终端诊断不可保证可见，构建诊断仍在构建终端。
+
+数据通常位于 `%APPDATA%\dev.untilalime.desktop\vault.lime`，以 Tauri 为准。请通过设置导出加密备份，遗忘主密码不能找回。改密前备份可能仍用旧密码。安装方式与限制见 [安装说明](docs/install.md)，实际结果见 [验收报告](docs/acceptance-report.md)。
+
+干净构建：复制已跟踪源码及锁文件到新目录，运行 npm ci，再运行统一检查和 release 构建。当前测试工具链为 Node 24.15.0 / npm 11.12.1 / Rust 1.98.1；未验证 MSRV，workspace 的 1.85 不代表桌面成员声明或实测最低版本。

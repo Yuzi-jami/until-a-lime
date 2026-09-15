@@ -191,8 +191,17 @@ impl Vault {
         self.undo = None;
         Ok(source.data.records.len())
     }
+    #[cfg(test)]
     pub fn restore(path: PathBuf, password: &str) -> Result<Self> {
+        Self::prepare_restore(path, password)?.commit_restore()
+    }
+    pub fn prepare_restore(path: PathBuf, password: &str) -> Result<Self> {
         let mut backup = Self::open(path.with_extension("lime.bak"), password)?;
+        backup.path = path;
+        Ok(backup)
+    }
+    pub fn commit_restore(self) -> Result<Self> {
+        let path = self.path.clone();
         let exists = path.try_exists().map_err(|_| "无法检查密码库路径。")?;
         if exists {
             let previous = read_limited(&path)?;
@@ -203,11 +212,14 @@ impl Vault {
             let archive = path.with_extension(format!("before-restore-{suffix}.lime"));
             atomic_write(&archive, &previous, true)?;
         }
-        atomic_write(&path, &backup.disk, !exists)?;
-        backup.path = path;
-        Ok(backup)
+        atomic_write(&path, &self.disk, !exists)?;
+        Ok(self)
     }
+    #[cfg(test)]
     pub fn create(path: PathBuf, password: &str) -> Result<Self> {
+        Self::prepare_create(path, password)?.commit_create()
+    }
+    pub fn prepare_create(path: PathBuf, password: &str) -> Result<Self> {
         if password.chars().count() < 12 {
             return Err("主密码至少需要 12 个字符。".into());
         }
@@ -228,9 +240,12 @@ impl Vault {
             undo: None,
         };
         let bytes = vault.encrypt(&vault.data)?;
-        atomic_write(&vault.path, &bytes, true)?;
         vault.disk = bytes;
         Ok(vault)
+    }
+    pub fn commit_create(self) -> Result<Self> {
+        atomic_write(&self.path, &self.disk, true)?;
+        Ok(self)
     }
     pub fn open(path: PathBuf, password: &str) -> Result<Self> {
         let bytes = read_limited(&path)?;

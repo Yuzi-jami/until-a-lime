@@ -1,7 +1,8 @@
+﻿param([ValidateSet("Debug", "Release")][string]$Configuration = "Debug")
 # Exercises only this project's desktop window; no UIA, clipboard or input injection.
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$executable = (Resolve-Path (Join-Path $projectRoot 'target\debug\until-a-lime.exe')).Path
+$executable = (Resolve-Path (Join-Path $projectRoot ("target\{0}\until-a-lime.exe" -f $Configuration.ToLowerInvariant()))).Path
 function Get-LimeInstances {
     @(Get-Process -Name 'until-a-lime' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -eq $executable })

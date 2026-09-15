@@ -1,8 +1,9 @@
+﻿param([ValidateSet("Debug", "Release")][string]$Configuration = "Debug")
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$executable = Join-Path $projectRoot 'target\debug\until-a-lime.exe'
+$executable = Join-Path $projectRoot ("target\{0}\until-a-lime.exe" -f $Configuration.ToLowerInvariant())
 if (-not (Test-Path -LiteralPath $executable)) {
-    throw 'Build the desktop preview first: npm run tauri -- build --debug --no-bundle'
+    throw ('Build the selected desktop first: npm.cmd run tauri -- build --no-bundle' + $(if ($Configuration -eq 'Debug') { ' --debug' } else { '' }))
 }
 $appProcess = Start-Process -FilePath $executable -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
 if ($appProcess.WaitForExit(1500)) {
