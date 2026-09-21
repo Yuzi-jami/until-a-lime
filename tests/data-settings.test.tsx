@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import CsvImportPanel from "../src/CsvImportPanel";
 import DataSettings from "../src/DataSettings";
 import ImportPanel from "../src/ImportPanel";
 const ipc = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -95,4 +96,36 @@ test("cancelling export is distinct from successful export", async () => {
   await waitFor(() =>
     expect(screen.getByRole("status").textContent).toContain("已取消"),
   );
+});
+
+test("CSV previews counts then commits only its ticket; cancel never commits", async () => {
+  const user = userEvent.setup(),
+    imported = vi.fn();
+  ipc.invoke.mockImplementation(async (command: string) => {
+    if (command === "vault_choose_csv")
+      return {
+        ticket: "csv-ticket",
+        name: "fictional.csv",
+        added: 2,
+        skipped: 1,
+      };
+    if (command === "vault_commit_csv")
+      return { entries: [], added: 2, skipped: 1 };
+  });
+  render(<CsvImportPanel onImported={imported} />);
+  await user.click(screen.getByRole("button", { name: "选择浏览器 CSV" }));
+  await screen.findByText("fictional.csv");
+  expect(ipc.invoke.mock.calls.some((c) => c[0] === "vault_commit_csv")).toBe(
+    false,
+  );
+  await user.click(screen.getByRole("button", { name: "取消导入" }));
+  expect(screen.queryByText("fictional.csv")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "选择浏览器 CSV" }));
+  await user.click(
+    await screen.findByRole("button", { name: "确认导入并加密保存" }),
+  );
+  expect(ipc.invoke).toHaveBeenCalledWith("vault_commit_csv", {
+    ticket: "csv-ticket",
+  });
+  await waitFor(() => expect(imported).toHaveBeenCalledWith([]));
 });

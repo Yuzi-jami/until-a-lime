@@ -1,4 +1,6 @@
 import type { AutoLockMinutes, ThemePreference } from "./preferences";
+import AccessSettings from "./AccessSettings";
+import BrowserSetup from "./BrowserSetup";
 import DataSettings from "./DataSettings";
 import type { Entry } from "./model";
 
@@ -22,6 +24,7 @@ export default function SettingsPanel({
       <div className="eyebrow">MAKE IT YOURS / 一点偏爱</div>
       <h2>收藏室设置</h2>
       <p>按你的习惯，调整这一小块空间。</p>
+      <AccessSettings />
       <fieldset>
         <legend>外观</legend>
         <div className="theme-choices">
@@ -71,6 +74,7 @@ export default function SettingsPanel({
           : "当前为演示锁定，尚未接入主密码验证。"}
       </p>
       {persistent && onImported && <DataSettings onImported={onImported} />}
+      <BrowserSetup />
       <div className="settings-note">
         偏好立即生效并保存在本机。
         {persistent

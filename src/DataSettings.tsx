@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import CsvImportPanel from "./CsvImportPanel";
 import ImportPanel from "./ImportPanel";
 import type { Entry } from "./model";
 
@@ -8,7 +9,9 @@ export default function DataSettings({
 }: {
   onImported: (entries: Entry[]) => void;
 }) {
-  const [mode, setMode] = useState<"none" | "password" | "import">("none"),
+  const [mode, setMode] = useState<"none" | "password" | "import" | "csv">(
+      "none",
+    ),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
@@ -90,6 +93,17 @@ export default function DataSettings({
         <button
           className="secondary"
           disabled={busy}
+          onClick={() => {
+            setMode(mode === "csv" ? "none" : "csv");
+            setError("");
+            setMessage("");
+          }}
+        >
+          导入浏览器 CSV
+        </button>
+        <button
+          className="secondary"
+          disabled={busy}
           onClick={() => void exportBackup()}
         >
           {busy ? "正在处理…" : "导出加密备份"}
@@ -165,6 +179,7 @@ export default function DataSettings({
           </fieldset>
         </form>
       )}
+      {mode === "csv" && <CsvImportPanel onImported={onImported} />}
       {mode === "import" && (
         <ImportPanel
           onImported={(entries) => {

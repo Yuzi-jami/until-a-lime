@@ -1,5 +1,5 @@
 {
-  "date": "2026-09-15",
+  "date": "2026-09-20",
   "scope": "Desktop Windows dependency metadata; license texts not audited",
   "packages": [
     {
@@ -2965,6 +2965,24 @@
       "name": "node_modules/yallist",
       "version": "3.1.1",
       "license": "ISC"
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "csv",
+      "version": "1.4.0",
+      "license": "Unlicense/MIT"
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "csv-core",
+      "version": "0.1.13",
+      "license": "Unlicense/MIT"
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ryu",
+      "version": "1.0.23",
+      "license": "Apache-2.0 OR BSL-1.0"
     }
   ]
 }

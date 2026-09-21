@@ -5,7 +5,7 @@
   "identifier": "dev.untilalime.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && npm run browser:prepare",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"
   },

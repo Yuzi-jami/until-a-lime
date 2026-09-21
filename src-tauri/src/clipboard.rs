@@ -116,9 +116,8 @@ pub fn copy_generated_password(window: tauri::WebviewWindow, value: String) -> R
     if !valid_password(&value) {
         return Err("只能复制 8–64 位可见 ASCII 字符。".into());
     }
-    window
-        .state::<crate::vault_service::VaultService>()
-        .access(|_| window.state::<ClipboardService>().copy_text(&value))
+    // A newly generated value does not read the vault and is available before authentication.
+    window.state::<ClipboardService>().copy_text(&value)
 }
 
 #[cfg(test)]

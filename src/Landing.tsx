@@ -1,0 +1,97 @@
+import { useEffect, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { Modal } from "./components";
+import Generator from "./GeneratorPanel";
+import SettingsPanel from "./SettingsPanel";
+import BrowserSetup from "./BrowserSetup";
+import { useAutoLockPreference, useTheme } from "./usePreferences";
+
+// Functional entry screen only. Visual design awaits the user's design files.
+export default function Landing({
+  onAccess,
+  ready,
+  error,
+}: {
+  onAccess: () => void;
+  ready: boolean;
+  error: string;
+}) {
+  const [panel, setPanel] = useState<
+    "settings" | "generate" | "browser" | null
+  >(null);
+  const { theme, changeTheme } = useTheme();
+  const { minutes, changeMinutes } = useAutoLockPreference();
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false,
+      stop: (() => void) | undefined;
+    void listen<string>("lime-action", ({ payload }) => {
+      if (payload === "generate") setPanel("generate");
+      if (payload === "search" || payload === "vault") {
+        setPanel(null);
+        onAccess();
+      }
+    })
+      .then((cleanup) => {
+        if (disposed) cleanup();
+        else stop = cleanup;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      stop?.();
+    };
+  }, [onAccess]);
+  return (
+    <main className="vault-gate">
+      <section className="vault-gate-card">
+        <h1>收藏室</h1>
+        <p>打开软件无需主密码。使用密码库时验证一次，有效会话内不重复验证。</p>
+        <button className="primary" disabled={!ready} onClick={onAccess}>
+          打开密码收藏室
+        </button>
+        <div className="data-buttons">
+          <button className="secondary" onClick={() => setPanel("generate")}>
+            密码生成器
+          </button>
+          <button className="secondary" onClick={() => setPanel("settings")}>
+            设置
+          </button>
+          <button className="secondary" onClick={() => setPanel("browser")}>
+            浏览器扩展
+          </button>
+        </div>
+        {error && (
+          <p role="alert" className="operation-error">
+            {error}
+          </p>
+        )}
+        {panel && (
+          <Modal
+            title={
+              panel === "generate"
+                ? "密码生成器"
+                : panel === "browser"
+                  ? "浏览器扩展"
+                  : "设置"
+            }
+            onClose={() => setPanel(null)}
+          >
+            {panel === "generate" && <Generator />}
+            {panel === "settings" && (
+              <SettingsPanel
+                theme={theme}
+                onTheme={changeTheme}
+                minutes={minutes}
+                onMinutes={changeMinutes}
+                persistent
+              />
+            )}
+            {panel === "browser" && <BrowserSetup />}
+          </Modal>
+        )}
+      </section>
+    </main>
+  );
+}

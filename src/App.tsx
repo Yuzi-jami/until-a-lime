@@ -1,3 +1,4 @@
+import SteamFillPanel from "./SteamFillPanel";
 import SettingsPanel from "./SettingsPanel";
 import { useTheme, useAutoLockPreference } from "./usePreferences";
 import { useIdleLock } from "./useIdleLock";
@@ -650,6 +651,7 @@ export default function App({
                     </div>
                     <div className="field-label">便笺</div>
                     <p className="note">{current.note}</p>
+                    {persistent && <SteamFillPanel id={current.id} />}
                     <div className="detail-bottom">
                       <button onClick={() => setDialog({ kind: "search" })}>
                         快捷搜索 ↗

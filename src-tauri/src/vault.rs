@@ -114,7 +114,7 @@ fn atomic_write(path: &Path, bytes: &[u8], create: bool) -> Result<()> {
     }
     Ok(())
 }
-fn validate(meta: &Metadata, password: Option<&str>) -> Result<()> {
+pub(crate) fn validate(meta: &Metadata, password: Option<&str>) -> Result<()> {
     if meta.name.trim().is_empty()
         || meta.user.trim().is_empty()
         || meta.name.chars().count() > 40
@@ -321,6 +321,56 @@ impl Vault {
         self.data = data;
         Ok(())
     }
+    pub fn csv_counts(&self, rows: &[crate::browser_csv::CsvEntry]) -> (usize, usize) {
+        let mut seen: HashSet<(&str, &str, &str)> = self
+            .data
+            .records
+            .iter()
+            .map(|r| {
+                (
+                    r.meta.url.as_str(),
+                    r.meta.user.as_str(),
+                    r.password.as_str(),
+                )
+            })
+            .collect();
+        let added = rows
+            .iter()
+            .filter(|r| seen.insert((&r.meta.url, &r.meta.user, &r.password)))
+            .count();
+        (added, rows.len() - added)
+    }
+    pub fn import_csv(&mut self, rows: &[crate::browser_csv::CsvEntry]) -> Result<(usize, usize)> {
+        let (added, skipped) = self.csv_counts(rows);
+        if self.data.records.len() + added > MAX_ENTRIES
+            || u64::from(self.data.next_id) + added as u64 >= i32::MAX as u64
+        {
+            return Err("导入后超过密码库记录上限。".into());
+        }
+        let mut next = self.data.clone();
+        for row in rows {
+            validate(&row.meta, Some(&row.password))?;
+            if next.records.iter().any(|r| {
+                r.meta.url == row.meta.url
+                    && r.meta.user == row.meta.user
+                    && r.password == *row.password
+            }) {
+                continue;
+            }
+            let mut meta = row.meta.clone();
+            meta.id = next.next_id;
+            next.next_id += 1;
+            next.records.push(Record {
+                meta,
+                password: row.password.to_string(),
+            });
+        }
+        if added > 0 {
+            self.commit(next)?;
+            self.undo = None;
+        }
+        Ok((added, skipped))
+    }
     pub fn list(&self) -> Vec<Metadata> {
         self.data
             .records
@@ -416,6 +466,37 @@ mod tests {
             favorite: true,
             note: "private note".into(),
         }
+    }
+    #[test]
+    fn csv_import_deduplicates_reassigns_ids_and_commits_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("csv-vault.lime");
+        let mut vault = Vault::create(path.clone(), "fictional-master-only").unwrap();
+        let rows = crate::browser_csv::parse(b"name,url,username,password\nSite,https://example.invalid,u,p\nSite,https://example.invalid,u,p\nSite,https://example.invalid,u,new-password\n").unwrap();
+        assert_eq!(vault.csv_counts(&rows), (2, 1));
+        assert_eq!(vault.import_csv(&rows).unwrap(), (2, 1));
+        assert_eq!(
+            vault.list().iter().map(|e| e.id).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(
+            Vault::open(path.clone(), "fictional-master-only")
+                .unwrap()
+                .list()
+                .len(),
+            2
+        );
+        assert_eq!(vault.import_csv(&rows).unwrap(), (0, 3));
+        let original = std::fs::read(&path).unwrap();
+        std::fs::write(&path, b"externally changed").unwrap();
+        let more = crate::browser_csv::parse(
+            b"url,username,password\nhttps://new.invalid,new-user,test\n",
+        )
+        .unwrap();
+        assert!(vault.import_csv(&more).is_err());
+        assert_eq!(vault.list().len(), 2);
+        assert_eq!(std::fs::read(&path).unwrap(), b"externally changed");
+        assert!(!original.windows(12).any(|w| w == b"new-password"));
     }
     #[test]
     fn encrypted_lifecycle_and_recovery() {

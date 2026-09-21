@@ -13,3 +13,6 @@
 *.lime
 *.lime.bak
 /.acceptance/
+
+/src-tauri/binaries/
+/browser-bridge.json

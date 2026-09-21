@@ -16,6 +16,11 @@ struct State {
     busy: bool,
     last: SystemTime,
     minutes: u32,
+    csv_import: Option<(
+        String,
+        Vec<crate::browser_csv::CsvEntry>,
+        std::time::Instant,
+    )>,
     import_file: Option<(String, PathBuf, std::time::Instant)>,
 }
 #[derive(Clone)]
@@ -40,6 +45,7 @@ impl VaultService {
                 last: SystemTime::now(),
                 minutes: 5,
                 import_file: None,
+                csv_import: None,
             })),
         }
     }
@@ -47,6 +53,7 @@ impl VaultService {
         if let Ok(mut state) = self.state.lock() {
             state.vault = None;
             state.import_file = None;
+            state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
         }
     }
@@ -61,12 +68,20 @@ impl VaultService {
         let Ok(mut state) = self.state.lock() else {
             return true;
         };
+        if state
+            .csv_import
+            .as_ref()
+            .is_some_and(|v| std::time::Instant::now() >= v.2)
+        {
+            state.csv_import = None;
+        }
         if let Some(vault) = state.vault.as_mut() {
             vault.expire_undo();
         }
         if Self::expired(&state) {
             state.vault = None;
             state.import_file = None;
+            state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
             return true;
         }
@@ -83,6 +98,7 @@ impl VaultService {
         if Self::expired(&state) {
             state.vault = None;
             state.import_file = None;
+            state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
         }
         let vault = state.vault.as_mut().ok_or("密码库已锁定。")?;
@@ -135,11 +151,94 @@ impl VaultService {
 }
 
 impl VaultService {
+    pub(crate) fn steam_epoch(&self, id: u32) -> Result<u64, String> {
+        let state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
+        if state.busy || Self::expired(&state) {
+            return Err("请先验证密码库。".into());
+        }
+        let vault = state.vault.as_ref().ok_or("请先验证密码库。")?;
+        if !vault.list().iter().any(|e| e.id == id) {
+            return Err("账号不存在。".into());
+        }
+        Ok(state.epoch)
+    }
+    pub(crate) fn with_steam_field<T>(
+        &self,
+        epoch: u64,
+        id: u32,
+        field: &str,
+        action: impl FnOnce(&str) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
+        if state.epoch != epoch || state.busy || Self::expired(&state) {
+            return Err("填写授权已失效，请重新准备。".into());
+        }
+        let vault = state.vault.as_ref().ok_or("密码库已锁定。")?;
+        let value = match field {
+            "password" => vault.secret(id)?,
+            "user" => Zeroizing::new(
+                vault
+                    .list()
+                    .iter()
+                    .find(|e| e.id == id)
+                    .ok_or("账号不存在。")?
+                    .user
+                    .clone(),
+            ),
+            _ => return Err("只支持单项填写。".into()),
+        };
+        let result = action(&value);
+        if result.is_ok() {
+            state.last = SystemTime::now();
+        }
+        result
+    }
+    pub fn browser_request(
+        &self,
+        request: crate::browser_protocol::Request,
+    ) -> Result<crate::browser_bridge::Reply, String> {
+        use crate::browser_bridge::{matches_site, origin, BrowserEntry, Credential, Reply};
+        let site = origin(&request.origin)?;
+        self.access(|vault| {
+            let entries = vault.list();
+            match request.operation.as_str() {
+                "list" => Ok(Reply {
+                    entries: Some(
+                        entries
+                            .iter()
+                            .filter(|e| matches_site(&e.url, &site))
+                            .map(|e| BrowserEntry {
+                                id: e.id,
+                                name: e.name.clone(),
+                                user: e.user.clone(),
+                            })
+                            .collect(),
+                    ),
+                    ..Reply::default()
+                }),
+                "fill" => {
+                    let entry = entries
+                        .iter()
+                        .find(|e| Some(e.id) == request.id && matches_site(&e.url, &site))
+                        .ok_or("此账号与当前网站不匹配。")?;
+                    Ok(Reply {
+                        credential: Some(Credential {
+                            user: entry.user.clone(),
+                            password: vault.secret(entry.id)?.to_string(),
+                        }),
+                        ..Reply::default()
+                    })
+                }
+                _ => Err("不支持的浏览器请求。".into()),
+            }
+        })
+    }
     fn begin_sensitive(&self, allow_new: bool) -> Result<u64, String> {
         let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
         if Self::expired(&state) {
             state.vault = None;
             state.import_file = None;
+            state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
         }
         if state.busy {
@@ -206,6 +305,115 @@ impl VaultService {
 pub struct ImportChoice {
     ticket: String,
     name: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct CsvPreview {
+    ticket: String,
+    name: String,
+    added: usize,
+    skipped: usize,
+}
+#[derive(serde::Serialize)]
+pub struct CsvResult {
+    entries: Vec<Metadata>,
+    added: usize,
+    skipped: usize,
+}
+#[tauri::command]
+pub async fn vault_choose_csv(window: tauri::WebviewWindow) -> Result<Option<CsvPreview>, String> {
+    use rand_core::RngCore;
+    require_main(&window)?;
+    let service = window.state::<VaultService>().inner().clone();
+    service.access(|_| Ok(()))?;
+    let epoch = service
+        .state
+        .lock()
+        .map_err(|_| "密码库服务不可用。")?
+        .epoch;
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .set_title("选择 Edge / Chrome 导出的 CSV")
+        .add_filter("浏览器密码 CSV", &["csv"])
+        .pick_file()
+        .await
+    else {
+        return Ok(None);
+    };
+    let path = file.path().to_path_buf();
+    let name = path
+        .file_name()
+        .ok_or("文件名无效。")?
+        .to_string_lossy()
+        .into_owned();
+    let rows = tauri::async_runtime::spawn_blocking(move || crate::browser_csv::read(&path))
+        .await
+        .map_err(|_| "CSV 读取未完成。")??;
+    let mut state = service.state.lock().map_err(|_| "密码库服务不可用。")?;
+    if state.epoch != epoch || state.busy || VaultService::expired(&state) {
+        return Err("选择期间密码库已锁定或变化，请重新选择。".into());
+    }
+    let (added, skipped) = state
+        .vault
+        .as_ref()
+        .ok_or("请先验证主密码。")?
+        .csv_counts(&rows);
+    let mut random = [0; 16];
+    rand_core::OsRng
+        .try_fill_bytes(&mut random)
+        .map_err(|_| "系统随机数不可用。")?;
+    let ticket: String = random.iter().map(|b| format!("{b:02x}")).collect();
+    state.csv_import = Some((
+        ticket.clone(),
+        rows,
+        std::time::Instant::now() + Duration::from_secs(600),
+    ));
+    Ok(Some(CsvPreview {
+        ticket,
+        name,
+        added,
+        skipped,
+    }))
+}
+#[tauri::command]
+pub fn vault_cancel_csv(window: tauri::WebviewWindow) -> Result<(), String> {
+    require_main(&window)?;
+    window
+        .state::<VaultService>()
+        .state
+        .lock()
+        .map_err(|_| "密码库服务不可用。")?
+        .csv_import = None;
+    Ok(())
+}
+impl VaultService {
+    fn commit_csv(&self, ticket: &str) -> Result<CsvResult, String> {
+        let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
+        if state.busy || Self::expired(&state) {
+            state.csv_import = None;
+            return Err("密码库忙碌或验证已过期。".into());
+        }
+        let (expected, _, deadline) = state.csv_import.as_ref().ok_or("请重新选择 CSV 文件。")?;
+        if expected != ticket || std::time::Instant::now() >= *deadline {
+            return Err("CSV 选择已过期。".into());
+        }
+        let (_, rows, _) = state.csv_import.take().ok_or("请重新选择 CSV 文件。")?;
+        let vault = state.vault.as_mut().ok_or("请先验证主密码。")?;
+        let (added, skipped) = vault.import_csv(&rows)?;
+        let entries = vault.list();
+        state.last = SystemTime::now();
+        Ok(CsvResult {
+            entries,
+            added,
+            skipped,
+        })
+    }
+}
+#[tauri::command]
+pub fn vault_commit_csv(window: tauri::WebviewWindow, ticket: String) -> Result<CsvResult, String> {
+    require_main(&window)?;
+    let result = window.state::<VaultService>().commit_csv(&ticket)?;
+    let _ = window.emit("lime-vault-changed", ());
+    Ok(result)
 }
 #[tauri::command]
 pub async fn vault_choose_import(
@@ -324,6 +532,7 @@ fn require_main(window: &tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 pub fn lock_all(app: &tauri::AppHandle) {
+    app.state::<crate::steam_fill::SteamFill>().cancel();
     app.state::<VaultService>().lock();
     app.state::<ClipboardService>().clear(app, true);
     let _ = app.emit_to("main", "lime-action", "lock");
@@ -460,6 +669,95 @@ pub fn vault_copy(window: tauri::WebviewWindow, id: u32, field: String) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn browser_access_requires_valid_session_and_exact_site_and_csv_ticket_dies_on_lock() {
+        use crate::browser_protocol::Request;
+        let dir = tempfile::tempdir().unwrap();
+        let service = VaultService::new(dir.path().join("vault.lime"));
+        let request = |operation: &str, origin: &str, id| Request {
+            operation: operation.into(),
+            origin: origin.into(),
+            id,
+        };
+        assert!(service
+            .browser_request(request("list", "https://example.invalid", None))
+            .is_err());
+        service
+            .authenticate(Zeroizing::new("fictional-master-only".into()), true, false)
+            .unwrap();
+        let rows = crate::browser_csv::parse(
+            b"url,username,password\nhttps://example.invalid,u,test-value\n",
+        )
+        .unwrap();
+        service.access(|v| v.import_csv(&rows)).unwrap();
+        assert_eq!(
+            service
+                .browser_request(request("list", "https://example.invalid", None))
+                .unwrap()
+                .entries
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(service
+            .browser_request(request("fill", "https://evil.invalid", Some(1)))
+            .is_err());
+        assert!(service
+            .browser_request(request("export", "https://example.invalid", None))
+            .is_err());
+        assert_eq!(
+            service
+                .browser_request(request("fill", "https://example.invalid", Some(1)))
+                .unwrap()
+                .credential
+                .unwrap()
+                .password,
+            "test-value"
+        );
+        service.state.lock().unwrap().csv_import = Some((
+            "csv-ticket".into(),
+            rows,
+            std::time::Instant::now() + Duration::from_secs(600),
+        ));
+        service.lock();
+        assert!(service.commit_csv("csv-ticket").is_err());
+        assert!(service
+            .browser_request(request("fill", "https://example.invalid", Some(1)))
+            .is_err());
+    }
+    #[test]
+    fn steam_request_never_executes_after_lock_or_with_invalid_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = VaultService::new(dir.path().join("vault.lime"));
+        assert!(service.steam_epoch(1).is_err());
+        service
+            .authenticate(Zeroizing::new("fictional-master-only".into()), true, false)
+            .unwrap();
+        let rows = crate::browser_csv::parse(b"url,username,password\nhttps://store.steampowered.com,fictional-user,fictional-password\n").unwrap();
+        service.access(|v| v.import_csv(&rows)).unwrap();
+        let epoch = service.steam_epoch(1).unwrap();
+        assert!(service
+            .with_steam_field::<()>(epoch, 1, "both", |_| panic!("must not execute"))
+            .is_err());
+        assert_eq!(
+            service
+                .with_steam_field(epoch, 1, "user", |s| Ok(s.to_string()))
+                .unwrap(),
+            "fictional-user"
+        );
+        service.lock();
+        assert!(service
+            .with_steam_field::<()>(epoch, 1, "password", |_| panic!("must not execute"))
+            .is_err());
+        service
+            .authenticate(Zeroizing::new("fictional-master-only".into()), false, false)
+            .unwrap();
+        assert!(service
+            .with_steam_field::<()>(epoch, 1, "password", |_| panic!(
+                "old request must not execute"
+            ))
+            .is_err());
+    }
     #[test]
     fn lock_cancels_an_inflight_authentication() {
         let dir = tempfile::tempdir().unwrap();

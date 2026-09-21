@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import App from "./App";
-import { OrangeMark } from "./components";
+import Landing from "./Landing";
+import { startupVerification } from "./AccessSettings";
+import { Modal, OrangeMark } from "./components";
 import { useTheme } from "./usePreferences";
 import type { Entry } from "./model";
 import ImportPanel from "./ImportPanel";
@@ -15,10 +23,13 @@ export default function VaultRoot() {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [ready, setReady] = useState(false);
+  const [authOpen, setAuthOpen] = useState(startupVerification);
+  const requestAccess = useCallback(() => setAuthOpen(true), []);
   const epoch = useRef(0);
   useTheme();
   useEffect(() => {
     if (!isTauri()) return;
+    let initialized = false;
     let disposed = false,
       cleanup: (() => void) | undefined;
     const status = () =>
@@ -34,6 +45,7 @@ export default function VaultRoot() {
       if (event.payload === "lock") {
         epoch.current++;
         setEntries(null);
+        if (initialized) setAuthOpen(false);
         setError("");
         void status().catch(() => setError("无法读取密码库状态，请重试。"));
       }
@@ -47,6 +59,7 @@ export default function VaultRoot() {
         await invoke("vault_lock");
         await status();
         if (!disposed) {
+          initialized = true;
           setReady(true);
           await invoke("show_floating");
         }
@@ -64,6 +77,7 @@ export default function VaultRoot() {
   const lock = () => {
     epoch.current++;
     setEntries(null);
+    setAuthOpen(false);
     void invoke("vault_lock").catch(() =>
       setError("锁定请求失败，请退出应用。"),
     );
@@ -95,6 +109,7 @@ export default function VaultRoot() {
     try {
       const result = await pending;
       if (epoch.current === request) {
+        setAuthOpen(false);
         setExists(true);
         setRestore(false);
         setEntries(result);
@@ -111,98 +126,116 @@ export default function VaultRoot() {
     }
   };
   return (
-    <main className="vault-gate">
-      <section className="vault-gate-card">
-        <OrangeMark />
-        <div className="eyebrow">UNTIL / A LIME · 本地密码库</div>
-        <h1>
-          {restore
-            ? "找回上次的收藏。"
-            : exists === false
-              ? "给秘密一个家。"
-              : "秘密，暂时合上。"}
-        </h1>
-        <p>
-          {restore
-            ? "验证主密码后恢复上一次保存的加密备份。当前文件会另存，最近一次修改可能不在备份中。"
-            : exists === false
-              ? "设置主密码，创建属于你的加密收藏室。"
-              : "输入主密码，打开你的收藏室。"}
-        </p>
-        <form onSubmit={(event) => void submit(event)}>
-          <fieldset disabled={busy || !ready || exists === null}>
-            <label>
-              主密码
-              <input
-                name="master"
-                type="password"
-                autoFocus
-                required
-                minLength={exists || restore ? 1 : 12}
-                maxLength={1024}
-                autoComplete={exists ? "current-password" : "new-password"}
-                placeholder={
-                  exists ? "输入主密码" : "至少 12 个字符，建议使用长口令"
-                }
-              />
-            </label>
-            {exists === false && !restore && (
-              <>
+    <>
+      <Landing
+        onAccess={requestAccess}
+        ready={ready}
+        error={authOpen ? "" : error}
+      />
+      {authOpen && (
+        <Modal
+          title="验证主密码"
+          onClose={() => {
+            epoch.current++;
+            setAuthOpen(false);
+            setRestore(false);
+            setError("");
+            void invoke("vault_lock");
+          }}
+        >
+          <section className="vault-gate-card">
+            <OrangeMark />
+            <div className="eyebrow">UNTIL / A LIME · 本地密码库</div>
+            <h1>
+              {restore
+                ? "找回上次的收藏。"
+                : exists === false
+                  ? "给秘密一个家。"
+                  : "秘密，暂时合上。"}
+            </h1>
+            <p>
+              {restore
+                ? "验证主密码后恢复上一次保存的加密备份。当前文件会另存，最近一次修改可能不在备份中。"
+                : exists === false
+                  ? "设置主密码，创建属于你的加密收藏室。"
+                  : "本次验证后可以连续查看与管理账号，直到锁定或退出。"}
+            </p>
+            <form onSubmit={(event) => void submit(event)}>
+              <fieldset disabled={busy || !ready || exists === null}>
                 <label>
-                  再次输入
+                  主密码
                   <input
-                    name="confirm"
+                    name="master"
                     type="password"
+                    autoFocus
                     required
+                    minLength={exists || restore ? 1 : 12}
                     maxLength={1024}
-                    autoComplete="new-password"
+                    autoComplete={exists ? "current-password" : "new-password"}
+                    placeholder={
+                      exists ? "输入主密码" : "至少 12 个字符，建议使用长口令"
+                    }
                   />
                 </label>
-                <p>
-                  主密码不会保存，忘记后无法恢复。请先用测试账号体验此开发版本。
-                </p>
-              </>
+                {exists === false && !restore && (
+                  <>
+                    <label>
+                      再次输入
+                      <input
+                        name="confirm"
+                        type="password"
+                        required
+                        maxLength={1024}
+                        autoComplete="new-password"
+                      />
+                    </label>
+                    <p>
+                      主密码不会保存，忘记后无法恢复。请先用测试账号体验此开发版本。
+                    </p>
+                  </>
+                )}
+                <button className="primary">
+                  {busy
+                    ? "正在处理…"
+                    : restore
+                      ? "验证主密码并恢复 ↗"
+                      : exists === false
+                        ? "创建密码库 ↗"
+                        : "解锁收藏室 ↗"}
+                </button>
+              </fieldset>
+            </form>
+            {exists === false && ready && !busy && (
+              <ImportPanel
+                newVault
+                onImported={(updated) => {
+                  setExists(true);
+                  setEntries(updated);
+                  setRestore(false);
+                }}
+              />
             )}
-            <button className="primary">
-              {busy
-                ? "正在处理…"
-                : restore
-                  ? "验证主密码并恢复 ↗"
-                  : exists === false
-                    ? "创建密码库 ↗"
-                    : "解锁收藏室 ↗"}
-            </button>
-          </fieldset>
-        </form>
-        {exists === false && ready && !busy && (
-          <ImportPanel
-            newVault
-            onImported={(updated) => {
-              setExists(true);
-              setEntries(updated);
-              setRestore(false);
-            }}
-          />
-        )}
-        {backup && (
-          <button
-            className="gate-recover"
-            disabled={busy}
-            onClick={() => {
-              setRestore((value) => !value);
-              setError("");
-            }}
-          >
-            {restore ? "返回正常解锁" : "从上次加密备份恢复"}
-          </button>
-        )}
-        {error && (
-          <p role="alert" className="gate-error">
-            {error}
-          </p>
-        )}
-        <small>账号内容加密保存在本机 · 无云端同步</small>
-      </section>
-    </main>
+            {backup && (
+              <button
+                className="gate-recover"
+                disabled={busy}
+                onClick={() => {
+                  setRestore((value) => !value);
+                  setError("");
+                }}
+              >
+                {restore ? "返回正常解锁" : "从上次加密备份恢复"}
+              </button>
+            )}
+            {error && (
+              <p role="alert" className="gate-error">
+                {error}
+              </p>
+            )}
+            <small>账号内容加密保存在本机 · 无云端同步</small>
+          </section>
+        </Modal>
+      )}
+    </>
   );
 }

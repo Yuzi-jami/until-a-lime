@@ -31,6 +31,7 @@ const entry = {
   note: "",
 };
 beforeEach(() => {
+  localStorage.setItem("lime.accessMode", "startup");
   ipc.listeners.clear();
   ipc.invoke.mockReset();
   ipc.invoke.mockImplementation(async (command: string) => {
@@ -179,4 +180,46 @@ test("save error preserves edit form and existing data; password reveal is expli
     screen.getByRole("button", { name: "查看 Test account" }),
   ).toBeTruthy();
   expect(screen.queryByText("test-secret-value")).toBeNull();
+});
+
+test("on-demand mode opens without auth, verifies once for a session, and clears on lock", async () => {
+  localStorage.setItem("lime.accessMode", "on-demand");
+  ipc.invoke.mockImplementation(async (command: string) => {
+    if (command === "vault_status")
+      return { exists: true, locked: true, backup: false };
+    if (command === "vault_auth") return [entry];
+    if (command === "vault_reveal") return "fictional-secret";
+  });
+  const user = userEvent.setup();
+  render(<VaultRoot />);
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /打开密码收藏室/,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  expect(screen.queryByLabelText("主密码")).toBeNull();
+  expect(
+    ipc.invoke.mock.calls.some(
+      (c) => c[0] === "vault_auth" || c[0] === "vault_list",
+    ),
+  ).toBe(false);
+  await user.click(screen.getByRole("button", { name: /打开密码收藏室/ }));
+  await user.type(screen.getByLabelText("主密码"), "test-master-password");
+  await user.click(screen.getByRole("button", { name: "解锁收藏室 ↗" }));
+  await screen.findByRole("button", { name: "查看 Test account" });
+  await user.click(screen.getByRole("button", { name: "显示" }));
+  await user.click(screen.getByRole("button", { name: "隐藏" }));
+  await user.click(screen.getByRole("button", { name: "显示" }));
+  expect(
+    ipc.invoke.mock.calls.filter((c) => c[0] === "vault_auth"),
+  ).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: /锁定收藏室/ }));
+  expect(screen.queryByText("fictional-secret")).toBeNull();
+  expect(screen.queryByLabelText("主密码")).toBeNull();
+  await user.click(screen.getByRole("button", { name: /打开密码收藏室/ }));
+  expect(screen.getByLabelText("主密码")).toBeTruthy();
 });

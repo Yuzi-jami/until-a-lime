@@ -117,3 +117,98 @@ P0 已验收；P1 实现完成待原生验收；P2 自动化及所发现缺陷�
 | `E:\直到密码变成一颗酸橙\target\debug\until-a-lime.exe` | 2026-09-15T21:59:01 | 14280704 | `6335842ed70fd2027c05dfb0fafe953af64539b62cfc4cd4040f02a9befe95c7` |
 | `E:\直到密码变成一颗酸橙\target\release\until-a-lime.exe` | 2026-09-15T21:56:25 | 9389568 | `528db4445cd80f288cf80e33dea5c9c8ea7e1a0270b9b5aa3b0ca66d2e86b9d8` |
 | `E:\直到密码变成一颗酸橙\target\release\bundle\nsis\直到密码变成一颗酸橙_0.1.0_x64-setup.exe` | 2026-09-15T21:56:23 | 2118957 | `09c65aee30c0312dbaa30d372d0ce8cd4ef7cc71f1067c2f12853d1b58498c2b` |
+
+# 2026-09-20 功能增量验收
+
+本段为新增记录，不覆盖 09-15 的历史证据。基线为 main / `3e72b82`（9.15 pass1）。本轮未提交、未推送。用户最新决定：停止自行设计前端；已恢复 App.tsx、main.tsx、usePreferences.ts 原内容，删除工业风 CSS，仅保留新功能的必要入口。未重新设计主题、轮盘或账号页面。
+
+## 实现范围
+
+- 默认按需验证；进入软件不要求主密码，首次进入密码库才弹出验证，可选启动验证。有效会话内连续操作无需重复验证；手动锁定、闲置、退出仍终止会话。验证前不暴露加密账号元数据；未持久保存主密码。改主密码仍专门验证旧主密码。生成器及复制新生成值不依赖密码库解锁。
+- CSV：Edge/Chrome 常见 UTF-8 表头、BOM、转义引号、逗号、多行备注；后端预览新增/重复条数、短期票据、显式确认、全量原子追加与重复跳过。保留原有字段长度和非空用户名限制；不支持的记录整体拒绝并显示序号，不截断数据。详见 browser-csv.md。
+- 浏览器：MV3 popup、精确 HTTPS origin 匹配、用户选择账号后填表、documentId 和字段身份复核、10 秒一次性页面票据、不覆盖已有密码、不自动提交。Rust 按当前会话鉴权；Native Messaging host 通过随机本地端口和每次启动 token 与桌面连接。支持准备当前用户 Chrome/Edge 注册与扩展文件，以及断开连接。
+- 安装限制：尚未上架扩展商店。按钮准备本机组件，但加载扩展仍需用户在浏览器扩展管理页确认；不能称为商店“一键安装”已完成。未执行用户浏览器注册/安装，未修改策略或提升权限。
+
+## 本轮文件
+
+新增 src/AccessSettings.tsx、Landing.tsx、BrowserSetup.tsx、CsvImportPanel.tsx；修改 VaultRoot/SettingsPanel/DataSettings 与 clipboard.rs。新增 browser_csv.rs、browser_bridge.rs、browser_protocol.rs、bin/lime-browser-host.rs；修改 vault.rs/vault_service.rs/lib.rs/Cargo.toml/Cargo.lock 注册命令、会话与导入行为。增加 csv 1.4.0、csv-core 0.1.13、ryu 1.0.23，url 改为显式依赖（已有版本）；未全量升级。
+
+新增 extension/（manifest、固定开发 ID、公钥、图标、popup 和 fill）；scripts/prepare-browser.mjs、browser-fill.test.mjs。Tauri beforeBuildCommand 自动准备 host，NSIS 分发额外 Cargo 二进制。Check-Desktop.ps1 纳入组件构建。docs/browser-csv.md、browser-extension.md 描述使用、构建与边界，README/plan/vault/compatibility/handoff 同步。核心 LIMEV001 格式、加密参数、identifier、CSP 和 WebView capability 没有变化。
+
+## 实际验证
+
+| 检查 | 退出码 | 实际结果 |
+| --- | --- | --- |
+| scripts/Check-Desktop.ps1 | 0 | browser:prepare、格式、前端测试/构建、Rust fmt、Clippy、测试全部通过；`.acceptance/features-checks-final.log` |
+| npm test | 0 | React 11 / Node 18，通过；Node 含 5 项扩展 DOM 模型测试，非真实浏览器扩展测试 |
+| cargo test -p until-a-lime --locked | 0 | lib 24 + host 1，通过；包含真实 loopback 服务的禁用/token/扩展来源/锁定拒绝，CSV 原子导入/重编号/去重/写入失败不变 |
+| cargo clippy -p until-a-lime --locked -- -D warnings | 0 | 桌面及组件通过；早期 all-targets 检查也通过 |
+| npm run browser:prepare | 首次 1，修复后 0 | 初始 externalBin 造成先有组件才能编译的循环；最终利用 Tauri 自动包含额外 Cargo 二进制，移除重复 externalBin 配置 |
+| python scripts/test-browser-host.py | 0 | 真实 release host 的 framed stdio → 隔离模拟 loopback → 回应，错误扩展拒绝；临时 APPDATA，没有真实库/注册表操作 |
+| npm run tauri -- build | 0 | 已生成包含本机组件的 NSIS；最终打包记录见 features-installer-final.log |
+| git diff --check | 0 | 无差异空白错误 |
+
+按需验证测试确认启动不调用 auth/list、验证后多次显示只认证一次、锁定移除明文及账号。CSV UI 测试确认预览不提交、取消不导入、确认仅传后端票据。扩展 DOM 测试为 jsdom 与虚构字段，不发送真实凭据；覆盖唯一表单、重复、HTTP、错误域、跨域 action、新密码框、现有输入、元素替换与过期。
+
+## 未执行与限制
+
+- Edge/Chrome 原生安装、Native Messaging 浏览器启动行为、真实网站、iframe/复杂多步登录：未实测。安装说明已提供，但不能据此宣称全部兼容或“插件功能最终验收完成”。
+- 桌面原生创建/解锁/文件选择器/托盘、安装升级卸载、剪贴板所有权、DPI/Narrator：本轮未新增原生证明，09-15 的缺口仍有效。
+- 扩展商店发布、正式安装链接、签名、MSRV、独立安全审计：未完成。安装包未签名。
+- 浏览器 token 保存在当前用户 AppData，依赖目录 ACL；同一用户恶意进程可读，不宣称能隔离被控制的本机用户。扩展来源参数与固定 ID 不是防本地伪造的强身份。锁定后拒绝新读取，但无法撤回已交给网页的数据。
+- CSV 是明文文件，内存清理不能保证所有解析器/IPC/网页副本擦除；源文件不自动删除。字段过长/用户名空白的真实导出可能被拒绝，错误规则在导入文档列明。
+- 未启动旧 windows-validation、UIA/SendInput 原型，未读取真实密码库或用户导出文件，未改变 QQ/系统锁屏范围。仅浏览器独立功能按本次需求推进。
+
+## 本轮构建产物
+
+下表为当前实际文件（覆盖同版本本地构建产物），未运行安装程序。使用新版安装包时请按 browser-extension.md 操作。
+
+| 文件 | 构建时间（本地） | 字节 | SHA-256 |
+| --- | --- | --- | --- |
+| `E:\直到密码变成一颗酸橙\target\release\until-a-lime.exe` | 2026-09-20T16:50:41 | 9604096 | `caea7e6c379e22288e6bb972287d6daa9add8c49aca5dc9515aec2b4c34c4756` |
+| `E:\直到密码变成一颗酸橙\target\release\lime-browser-host.exe` | 2026-09-20T16:50:33 | 336896 | `3b06a2d27c4bcc738082ebebaae4f03fbf407a6c26e081da38351ab0fac614a6` |
+| `E:\直到密码变成一颗酸橙\target\release\bundle\nsis\直到密码变成一颗酸橙_0.1.0_x64-setup.exe` | 2026-09-20T16:50:38 | 2231790 | `0387f601fc198e74d8aad61e5cd0870e7ecc52dd39161951767fae7cac2cdd62` |
+
+# 2026-09-20 浏览器操作说明与 Steam 填写追补
+
+本段是最新记录；上方计数和产物哈希保留为历史。用户明确：xcpcai.com 测试时只按 Tab，不清楚扩展如何使用；普通应用为 Steam。因此没有证据证明此前已完成扩展加载或触发填写，不能把该反馈直接记作扩展端到端失败。Tab 只切换焦点；此前 Steam 在产品中没有执行实现，复制按钮和 C0 模型不等于应用填写。
+
+## 本次修复及方案
+
+- 扩展 0.1.1 增加 Alt+Shift+L 打开 popup，补充首次加载、更新后重新加载、先打开登录弹窗及 Tab 行为说明。快捷键占用时可在浏览器扩展快捷键页修改。
+- 实际打开 `https://xcpcai.com/` 的公开页面并点击 Sign in，只读核对登录表单：可见 name=username 文本框、name=password 密码框，同属本站 form，autocomplete 为空。未输入凭据、未提交登录。这支持现有表单识别，但不是扩展端到端兼容证明。
+- 修复填写事件顺序：先设置用户名并派发 input/change，复核同一表单和字段，再设置密码并派发事件。原来先设置两个值再派发用户名事件，受控重绘可能清空密码。新增 xcpcai 形态表单模型模拟该重绘，并验证用户名事件替换密码框时停止交付密码。不是声称已在真实 xcpcai 复现该 bug。
+- 新增 `steam_fill.rs`、`SteamFillPanel.tsx`、后端会话方法和命令入口。已解锁记录中显式准备一个字段，30 秒内切换 Steam 点击对应框，按下并松开 Ctrl+Alt+P，通过剪贴板发送一次 Ctrl+V；不发 Tab/Enter，不自动登录。
+- Steam 请求绑定 epoch、记录和字段；锁定、取消、Esc、期限、目标变化均可终止。核对普通权限进程、窗口/焦点/线程/PID和存活句柄，复制后核对剪贴板序号；不调用旧原型或 UIA，不提权。实现细节和残余焦点竞态见 quickfill-design.md。只能提示“已发送粘贴”，不能据 SendInput 返回值宣称 Steam 已收值。
+- 仅新增功能入口及提示，未重新设计页面。库格式、加密参数、identifier、CSP、WebView capability 不变；没有访问真实库、读取用户密码、注册实际扩展或运行安装程序。
+
+## 实际检查
+
+| 检查 | 退出码 | 实际结果 / 本地日志 |
+| --- | --- | --- |
+| scripts/Check-Desktop.ps1 | 1 | browser:prepare、格式、前端测试/构建、Rust fmt/Clippy 通过，Rust 新测试因泛型推断 E0282 编译失败；fill-checks.log。已显式标注负向回调类型修复，未把此轮脚本写成通过 |
+| npm test（上述脚本内） | 0 | React 11 + Node 20 全通过；Node 含 7 项扩展 DOM 模型回归 |
+| npm run format:check / npm run build（上述脚本内） | 0 / 0 | 前端格式、TypeScript 和 Vite 通过；最终 NSIS 构建也重新执行 build |
+| cargo clippy -p until-a-lime --locked --all-targets -- -D warnings | 0 | 修复后通过；fill-clippy-final.log |
+| cargo test -p until-a-lime --locked | 0 | 修复后 lib 26 + host 1 全通过；fill-rust-final.log。新增 Steam 进程名规则、非法字段/锁定/旧 epoch 拒绝测试，无实际键盘输入 |
+| npm run tauri -- build | 0 | 最终 release 主程序、本机 host 和 NSIS 生成成功；fill-installer-final.log |
+| git diff --check / cargo fmt --all -- --check | 0 / 0 | 文档同步后的最终检查通过 |
+| Get-AuthenticodeSignature 最终安装包 | 0 | NotSigned，未签名 |
+
+最终检查只重跑受改动影响的 Rust 和安装构建，没有为补绿色脚本记录重复执行全部前端测试。前端 31 项、Rust 27 项均为自动化检查，不等于目标应用兼容验收。
+
+## 尚未执行
+
+Chrome/Edge 实际加载与更新扩展、从浏览器启动 Native Messaging、xcpcai.com 实际填写、Steam 原生热键与输入接收均未执行。当前原生 UI 控制不可用，且历史蓝屏根因未明；没有在日常环境启动旧输入原型或执行新的 SendInput 实验。Steam 因此明确标记“试用”，仍需在隔离环境用自建目标和虚构凭据检验取消、焦点切换、快捷键冲突、权限、剪贴板，再记录 Steam 版本和两个字段的实测结果。
+
+Steam 进程名白名单不等于可信签名验证；CEF 内部字段不能通过焦点 HWND 区分。用户须点击正确框，最终复核与实际粘贴仍有竞态。剪贴板路径不保证清除第三方历史。当前不能宣称“Steam 已兼容”或“全部问题已实测解决”。
+
+## 最新构建产物
+
+尚未安装或启动。使用前退出托盘旧实例；更新安装后，桌面再次准备浏览器扩展，浏览器首次加载或重新加载扩展文件。
+
+| 文件 | 构建时间（本地） | 字节 | SHA-256 |
+| --- | --- | --- | --- |
+| `E:\直到密码变成一颗酸橙\target\release\until-a-lime.exe` | 2026-09-20T17:18:21 | 9672704 | `9b6951549a5f4b8e694ae0f25ff1bb8c19be9c65de285873153d221b4b243412` |
+| `E:\直到密码变成一颗酸橙\target\release\lime-browser-host.exe` | 2026-09-20T17:18:14 | 336896 | `408a109cd0f033b02a756b1479edc8328dd698fe9caa76495098a1f7a5bf53d2` |
+| `E:\直到密码变成一颗酸橙\target\release\bundle\nsis\直到密码变成一颗酸橙_0.1.0_x64-setup.exe` | 2026-09-20T17:18:19 | 2237604 | `467893cdf649df56c190effcc861c13400faa93db369212c35b6deb156caf570` |

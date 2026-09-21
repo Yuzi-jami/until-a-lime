@@ -1,8 +1,12 @@
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+mod browser_bridge;
+mod browser_csv;
+mod browser_protocol;
 mod clipboard;
 mod placement;
+mod steam_fill;
 mod vault;
 mod vault_service;
 
@@ -198,6 +202,10 @@ pub fn run() {
         }))
         .invoke_handler(tauri::generate_handler![
             runtime_status,
+            steam_fill::steam_fill_arm,
+            steam_fill::steam_fill_cancel,
+            browser_bridge::browser_install,
+            browser_bridge::browser_disconnect,
             desktop_action,
             show_floating,
             drag_floating,
@@ -213,6 +221,9 @@ pub fn run() {
             vault_service::vault_undo,
             vault_service::vault_reveal,
             vault_service::vault_copy,
+            vault_service::vault_choose_csv,
+            vault_service::vault_commit_csv,
+            vault_service::vault_cancel_csv,
             vault_service::vault_choose_import,
             vault_service::vault_import,
             vault_service::vault_export,
@@ -220,9 +231,14 @@ pub fn run() {
         ])
         .setup(|app| {
             app.manage(clipboard::ClipboardService::start(app.handle().clone()));
+            app.manage(steam_fill::SteamFill::default());
             let vault =
                 vault_service::VaultService::new(app.path().app_data_dir()?.join("vault.lime"));
             app.manage(vault.clone());
+            app.manage(
+                browser_bridge::BrowserBridge::start(app.path().app_data_dir()?, vault.clone())
+                    .ok(),
+            );
             let vault_app = app.handle().clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(std::time::Duration::from_secs(1));
