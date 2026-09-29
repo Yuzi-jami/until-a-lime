@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>直到密码变成一颗酸橙 · 前端设计参考</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.9 5.8 6.4.9-4.7 4.6 1.1 6.4-5.7-3-5.7 3 1.1-6.4L2.7 9.7l6.4-.9Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4.5"/><path d="m11.5 11.5 8.5 8.5m-5-5 2.5-2.5m0 5 2.5-2.5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="2.5" fill="currentColor"/><circle cx="16" cy="17" r="2.5" fill="currentColor"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6m0-6L10 14M10 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5m-4 8a8 8 0 0 0 14 3l3-3m0 5v-5h-5"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="12" rx="2"/><path d="m5 15-3 5h20l-3-5M9 18h6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.7 7.3L22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7ZM20 2v4m-2-2h4"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-citrus" viewBox="0 0 48 48"><path d="M27 9c1-7 8-8 13-6-1 6-6 9-13 6" fill="#71A97E"/><circle cx="23" cy="27" r="18" fill="#F7943E"/><circle cx="23" cy="27" r="13.8" fill="#FFC079" stroke="#FFF6E4" stroke-width="1.7"/><g stroke="#FFF6E4" stroke-width="1.8"><path d="M23 14v26M10 27h26m-22-9 18 18m-18 0 18-18"/><circle cx="23" cy="27" r="2.2" fill="#FFF6E4"/></g></symbol>
+</defs></svg>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <a href="#vault" class="brand" aria-label="直到密码变成一颗酸橙，返回密码库"><span class="brand-mark"><svg><use href="#i-citrus"/></svg></span><span class="brand-text">直到密码<br>变成一颗酸橙<small>UNTIL A LIME</small></span></a>
+    <div class="space-picker"><span class="space-avatar">L</span><span>我的私人空间<small>Personal workspace</small></span><span class="chevron">⌄</span></div>
+    <div class="nav-caption">密码库 <span>VAULT</span></div>
+    <nav aria-label="主导航">
+      <button class="nav-item active" data-view="vault" data-filter="all"><svg class="icon"><use href="#i-grid"/></svg><span>全部密码</span><b id="nav-count">6</b></button>
+      <button class="nav-item" data-view="vault" data-filter="favorite"><svg class="icon"><use href="#i-star"/></svg><span>我的收藏</span><b id="favorite-count">3</b></button>
+      <button class="nav-item" data-view="vault" data-filter="recent"><svg class="icon"><use href="#i-clock"/></svg><span>最近使用</span></button>
+      <button class="nav-item" data-view="vault" data-filter="weak"><svg class="icon"><use href="#i-shield"/></svg><span>安全检查</span><i class="notification-dot"></i></button>
+      <div class="nav-caption tools-caption">工具 <span>TOOLS</span></div>
+      <button class="nav-item" data-view="extension"><svg class="icon"><use href="#i-globe"/></svg><span>浏览器扩展</span><span class="new-label">NEW</span></button>
+      <button class="nav-item" data-view="generator"><svg class="icon"><use href="#i-key"/></svg><span>密码生成器</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="local-card"><span class="local-card-icon"><svg class="icon"><use href="#i-laptop"/></svg></span><strong>秘密，留在你身边。</strong><p>本地储存，安心掌控。<br>每一个密码，都有自己的归处。</p><span class="local-label"><i></i> LOCAL FIRST</span></div>
+      <button class="nav-item" id="settings-button"><svg class="icon"><use href="#i-settings"/></svg><span>偏好设置</span></button>
+      <button class="nav-item" id="lock-button"><svg class="icon"><use href="#i-lock"/></svg><span>锁定密码库</span><kbd>⌥ L</kbd></button>
+      <div class="user-profile"><span class="user-avatar">L</span><span>酸橙收藏家<small>属于自己的，一小片安心。</small></span><span class="profile-dot"></span></div>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar"><div class="breadcrumb"><svg class="icon"><use href="#i-folder"/></svg><span>我的空间</span><span class="crumb-slash">/</span><strong id="breadcrumb-title">全部密码</strong></div><div class="topbar-right"><span class="preview-badge">设计预览</span><button class="topbar-lock mobile-settings" id="mobile-settings" aria-label="偏好设置"><svg class="icon"><use href="#i-settings"/></svg></button><button class="topbar-lock" id="top-lock" aria-label="锁定密码库"><svg class="icon"><use href="#i-lock"/></svg></button><span class="mini-avatar">L</span></div></header>
+    <main>
+      <section id="view-vault" class="page-view">
+        <section class="hero">
+          <div class="hero-copy"><span class="eyebrow"><i></i> A LITTLE LESS TO REMEMBER</span><h1>把秘密，<br>收藏成一颗<span>酸橙。</span></h1><p>少一点记忆负担，多一点自在生活。</p><button class="text-link" id="hero-generator">从一枚好密码开始 <svg class="icon"><use href="#i-arrow"/></svg></button></div>
+          <div class="hero-art"><img src="citrus-vault.svg" alt="橙色柑橘与浅蓝玻璃盾牌的插画"><span class="art-tag"><svg class="icon"><use href="#i-shield"/></svg> Small fruit. Big peace of mind.</span></div>
+        </section>
+        <div class="stats-grid">
+          <button class="stat-card" data-stat="all"><span class="stat-icon orange"><svg class="icon"><use href="#i-grid"/></svg></span><span><small>已收藏的密码</small><strong id="stat-count">6<em>个</em></strong></span><svg class="icon stat-arrow"><use href="#i-arrow"/></svg></button>
+          <button class="stat-card" data-stat="favorite"><span class="stat-icon pink"><svg class="icon"><use href="#i-star"/></svg></span><span><small>经常用的收藏</small><strong id="stat-favorites">3<em>个</em></strong></span><svg class="icon stat-arrow"><use href="#i-arrow"/></svg></button>
+          <button class="stat-card" data-stat="weak"><span class="stat-icon blue"><svg class="icon"><use href="#i-shield"/></svg></span><span><small>密码健康度</small><strong id="stat-health">83<em>分</em></strong></span><span class="health-ring" id="health-ring">↗</span></button>
+          <button class="stat-card" data-stat="extension"><span class="stat-icon lavender"><svg class="icon"><use href="#i-globe"/></svg></span><span><small>浏览器好搭档</small><strong class="extension-stat">Edge <span class="status-dot"></span></strong></span><span class="stat-note">去看看 <span>↗</span></span></button>
+        </div>
+        <section class="vault-section" aria-labelledby="vault-title">
+          <div class="section-title"><div><h2 id="vault-title">我的密码 <span id="list-count">06</span></h2><p id="list-subtitle">让每一次登录，都变得轻松一点。</p></div><button class="primary-button" id="add-button"><svg class="icon"><use href="#i-plus"/></svg>添加密码</button></div>
+          <div class="vault-toolbar"><div class="filter-tabs" aria-label="密码分类"><button class="selected" data-category="all" aria-pressed="true">全部</button><button data-category="工作" aria-pressed="false">工作与创作</button><button data-category="生活" aria-pressed="false">日常生活</button></div><label class="search-box"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="搜索网站或账号" aria-label="搜索网站或账号" autocomplete="off"><kbd>Ctrl K</kbd></label></div>
+          <div class="vault-panels"><div class="account-panel"><div class="table-header"><span>名称 / 账号</span><span>分类</span><span>状态</span><span></span></div><div id="account-list" role="list" aria-label="密码列表"></div><div id="empty-state" class="empty-state" hidden><svg class="icon"><use href="#i-search"/></svg><strong>这里暂时还没有密码</strong><p>试试其他关键词，或收藏你的第一枚密码。</p></div><div class="list-bottom"><svg class="icon"><use href="#i-lock"/></svg><span>只属于你的密码收藏</span><span id="visible-count">6 个项目</span></div></div><article class="detail-panel" id="detail-panel" aria-label="密码详情"></article></div>
+        </section>
+        <div class="connection-strip"><div class="connection-bubble"><svg class="icon"><use href="#i-globe"/></svg></div><p><strong>从浏览器，到你的私人密码库。</strong><span>自动记住，一键填入，让酸橙陪你一起上网。</span></p><button id="connection-button">探索浏览器扩展 <svg class="icon"><use href="#i-arrow"/></svg></button></div>
+      </section>
+
+      <section id="view-extension" class="page-view" hidden>
+        <div class="page-heading"><span class="eyebrow"><i></i> YOUR BROWSER'S LITTLE COMPANION</span><h1>你的浏览器，<span>多一份安心。</span></h1><p>从记住密码到轻松登录，酸橙就在手边。</p></div>
+        <div class="extension-layout"><div class="browser-scene"><div class="browser-chrome"><div class="traffic-lights"><i></i><i></i><i></i></div><span class="browser-tab"><span class="figma-mini">F</span> Figma · 登录 <span>×</span></span><span>＋</span></div><div class="browser-address"><span>←</span><span>→</span><svg class="icon"><use href="#i-refresh"/></svg><div><svg class="icon"><use href="#i-lock"/></svg>figma.com/login</div><span class="extension-toolbar-icon"><svg><use href="#i-citrus"/></svg></span></div><div class="mock-webpage"><span class="figma-large">F</span><h2>欢迎回来，创作者。</h2><p>下一件好作品，就从这里开始。</p><label>电子邮箱<input id="demo-email" readonly placeholder="name@example.com"></label><label>密码<input id="demo-password" type="password" readonly placeholder="输入你的密码"></label><button id="demo-login" class="mock-login">登录 Figma</button><span class="mock-site-note">示意网站 · 仅演示填写效果</span></div><div class="extension-popup"><div class="popup-brand"><svg><use href="#i-citrus"/></svg><strong>一颗酸橙</strong><span class="popup-status"><i></i>已连接</span></div><div class="popup-domain"><svg class="icon"><use href="#i-globe"/></svg>figma.com<span>匹配到 1 个账号</span></div><div class="popup-account"><span class="site-icon figma">F</span><span><strong>Figma</strong><small>lime@example.com</small></span><svg class="icon"><use href="#i-star"/></svg></div><button class="primary-button fill-button" id="fill-button"><svg class="icon"><use href="#i-spark"/></svg>一键填入</button><div class="popup-divider"></div><button class="popup-action" id="popup-generator"><svg class="icon"><use href="#i-key"/></svg>生成一个好密码<svg class="icon"><use href="#i-arrow"/></svg></button><button class="popup-action" id="popup-vault"><svg class="icon"><use href="#i-grid"/></svg>打开本地密码库<svg class="icon"><use href="#i-external"/></svg></button><div class="popup-footer"><svg class="icon"><use href="#i-laptop"/></svg>密码留在本机，安心跟着你。</div></div></div><aside class="extension-guide"><span class="blue-label">MEET YOUR EXTENSION</span><h2>记住这件小事，<br>交给酸橙。</h2><p>不打断，不打扰。<br>在需要的时候，刚好出现。</p><div class="feature-step"><span>01</span><div><h3>登录后，轻轻记住</h3><p>保存新密码，或更新已有账号。</p></div></div><div class="feature-step"><span>02</span><div><h3>再次访问，一键填入</h3><p>当前网站的账号，刚好在手边。</p></div></div><div class="feature-step"><span>03</span><div><h3>浏览器与本地，默契相连</h3><p>同一份密码收藏，两种轻松入口。</p></div></div><div class="browser-choice" aria-label="浏览器预览选择"><button class="selected" data-browser="Edge">◉ Microsoft Edge</button><button data-browser="Chrome">◉ Chrome</button></div><button class="secondary-button" id="save-preview">体验保存密码提示 <svg class="icon"><use href="#i-arrow"/></svg></button></aside></div>
+        <div class="extension-settings"><div><span class="stat-icon orange"><svg class="icon"><use href="#i-key"/></svg></span><span><strong>询问保存密码</strong><small>发现新账号时，显示一条温柔的提醒。</small></span><button class="switch on" role="switch" aria-checked="true" aria-label="询问保存密码"></button></div><div><span class="stat-icon blue"><svg class="icon"><use href="#i-spark"/></svg></span><span><strong>显示填充建议</strong><small>在登录表单旁，找到合适的账号。</small></span><button class="switch on" role="switch" aria-checked="true" aria-label="显示填充建议"></button></div></div>
+      </section>
+
+      <section id="view-generator" class="page-view" hidden>
+        <div class="page-heading"><span class="eyebrow"><i></i> A FRESH START FOR YOUR SECRETS</span><h1>复杂一点，<span>安心很多。</span></h1><p>密码不用好记，足够特别就好。</p></div>
+        <div class="generator-layout"><section class="generator-card"><div class="generator-card-heading"><span class="stat-icon orange"><svg class="icon"><use href="#i-key"/></svg></span><span>新鲜出炉的密码<small>FRESHLY SQUEEZED</small></span><span class="good-badge"><i></i>强密码</span></div><output id="generated-password" class="generated-password"></output><div class="strength-bars"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="range-label"><label for="password-length">密码长度</label><output id="length-output">20 <span>位</span></output></div><input id="password-length" type="range" min="12" max="40" value="20"><div class="range-endpoints"><span>12 位</span><span>40 位</span></div><div class="generator-options"><label><input type="checkbox" id="include-uppercase" checked>大写字母 <span>A–Z</span></label><label><input type="checkbox" id="include-numbers" checked>数字 <span>0–9</span></label><label><input type="checkbox" id="include-symbols" checked>符号 <span>!@#$</span></label></div><div class="generator-actions"><button class="secondary-button" id="regenerate"><svg class="icon"><use href="#i-refresh"/></svg>再来一枚</button><button class="primary-button" id="copy-generated"><svg class="icon"><use href="#i-copy"/></svg>复制密码</button></div></section><aside class="generator-note"><div class="generator-orange"><svg><use href="#i-citrus"/></svg></div><h2>好密码，<br>像酸橙一样新鲜。</h2><p>每个账号，一枚独特的密码。<br>让秘密之间，也保持一点距离。</p><div><svg class="icon"><use href="#i-check"/></svg>更长一点，更难猜一点</div><div><svg class="icon"><use href="#i-check"/></svg>不同账号，使用不同密码</div><div><svg class="icon"><use href="#i-check"/></svg>交给密码库，不必记在脑海</div></aside></div>
+      </section>
+      <footer class="page-footer"><span><span class="footer-dot"></span> A small place for your secrets.</span><span>UNTIL A LIME <i>✳</i> UI CONCEPT · 2026 <span class="footer-demo">虚构数据 · 交互演示</span></span></footer>
+    </main>
+  </div>
+</div>
+
+<dialog id="app-dialog" aria-labelledby="dialog-title"><button class="dialog-close icon-button" id="dialog-close" aria-label="关闭对话框"><svg class="icon"><use href="#i-close"/></svg></button><div id="dialog-content"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<section class="lock-screen" id="lock-screen" aria-labelledby="lock-title" hidden><div class="lock-orb"><svg><use href="#i-citrus"/></svg></div><span class="eyebrow">UNTIL A LIME</span><h1 id="lock-title">秘密，暂时合上。</h1><p>安心休息，酸橙替你守候。</p><button class="primary-button" id="unlock-button"><svg class="icon"><use href="#i-lock"/></svg>回到我的密码库</button><small>设计演示 · 点击即可解锁</small></section>
+<script src="app.js"></script>
+</body>
+</html>

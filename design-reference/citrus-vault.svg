@@ -1,0 +1,78 @@
+<svg width="520" height="330" viewBox="0 0 520 330" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">一颗酸橙，一座私密保险库</title>
+  <desc id="desc">细腻橙色柑橘、半透明冰蓝色盾牌与轻盈环绕的密码卡片。</desc>
+  <defs>
+    <radialGradient id="fruit" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(287 112) rotate(52) scale(139 146)">
+      <stop stop-color="#FFD56C"/><stop offset=".32" stop-color="#FFB33E"/><stop offset=".69" stop-color="#FF8A25"/><stop offset=".9" stop-color="#EC6917"/><stop offset="1" stop-color="#D85513"/>
+    </radialGradient>
+    <radialGradient id="fruit-light" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(276 105) rotate(49) scale(100 104)">
+      <stop stop-color="#FFF8D7" stop-opacity=".58"/><stop offset=".43" stop-color="#FFECA3" stop-opacity=".12"/><stop offset="1" stop-color="#FFF0A6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sphere" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(403 217) rotate(60) scale(40)">
+      <stop stop-color="#F5FCFF"/><stop offset=".4" stop-color="#B5DEFF"/><stop offset=".75" stop-color="#66B3F3"/><stop offset="1" stop-color="#287CCA"/>
+    </radialGradient>
+    <linearGradient id="leaf" x1="309" y1="74" x2="364" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#365F5C"/><stop offset=".47" stop-color="#679887"/><stop offset="1" stop-color="#90BDA7"/></linearGradient>
+    <linearGradient id="glass" x1="177" y1="129" x2="298" y2="272" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF" stop-opacity=".95"/><stop offset=".38" stop-color="#DDEFFF" stop-opacity=".91"/><stop offset="1" stop-color="#98C9F0" stop-opacity=".85"/></linearGradient>
+    <linearGradient id="glass-edge" x1="176" y1="119" x2="286" y2="270" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset=".52" stop-color="#ECF9FF"/><stop offset="1" stop-color="#76ACE0"/></linearGradient>
+    <linearGradient id="glass-side" x1="265" y1="171" x2="237" y2="278" gradientUnits="userSpaceOnUse"><stop stop-color="#81B9EE" stop-opacity=".85"/><stop offset="1" stop-color="#63A0DB"/></linearGradient>
+    <linearGradient id="lock" x1="211" y1="178" x2="255" y2="238" gradientUnits="userSpaceOnUse"><stop stop-color="#63AEED"/><stop offset=".55" stop-color="#3585D0"/><stop offset="1" stop-color="#1B60AF"/></linearGradient>
+    <linearGradient id="card" x1="347" y1="229" x2="413" y2="286" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E5F1FF"/></linearGradient>
+    <linearGradient id="orbit" x1="127" y1="233" x2="449" y2="126" gradientUnits="userSpaceOnUse"><stop stop-color="#98BDEE" stop-opacity="0"/><stop offset=".2" stop-color="#89B4ED" stop-opacity=".45"/><stop offset=".62" stop-color="#8BB5EF" stop-opacity=".75"/><stop offset="1" stop-color="#DCEBFC" stop-opacity=".15"/></linearGradient>
+    <filter id="ground" x="84" y="257" width="381" height="62" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="fruit-shadow" x="194" y="56" width="231" height="237" filterUnits="userSpaceOnUse"><feDropShadow dx="6" dy="19" stdDeviation="13" flood-color="#C98049" flood-opacity=".16"/></filter>
+    <filter id="shield-shadow" x="142" y="105" width="183" height="202" filterUnits="userSpaceOnUse"><feDropShadow dx="2" dy="15" stdDeviation="12" flood-color="#3973B3" flood-opacity=".16"/></filter>
+    <filter id="card-shadow" x="318" y="211" width="140" height="102" filterUnits="userSpaceOnUse"><feDropShadow dx="1" dy="9" stdDeviation="9" flood-color="#5D8EBF" flood-opacity=".15"/></filter>
+    <filter id="pores" x="222" y="71" width="173" height="176" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".77" numOctaves="3" stitchTiles="stitch" result="noise"/>
+      <feColorMatrix in="noise" type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope=".15"/></feComponentTransfer>
+      <feComposite in2="SourceGraphic" operator="in"/>
+      <feBlend in="SourceGraphic" mode="soft-light"/>
+    </filter>
+    <filter id="lock-shadow" x="198" y="169" width="69" height="83" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#5E8FC1" flood-opacity=".22"/></filter>
+    <clipPath id="fruit-clip"><path d="M309 77C326 77 339 78 357 90C383 107 396 135 392 163C391 202 365 234 328 242C291 251 253 235 235 205C217 176 220 142 234 117C250 88 280 73 309 77Z"/></clipPath>
+  </defs>
+  <ellipse cx="274" cy="286" rx="161" ry="9" fill="#4B84BF" opacity=".13" filter="url(#ground)"/>
+  <path d="M136 209C113 197 142 171 188 151C249 124 330 104 396 108C443 111 456 128 429 148" stroke="url(#orbit)" stroke-width="1.5"/>
+  <circle cx="162" cy="114" r="5" fill="#A2C8F0"/>
+  <circle cx="418" cy="84" r="3.5" fill="#F9AF68"/>
+  <circle cx="443" cy="171" r="2.5" fill="#80B5E9"/>
+  <g filter="url(#fruit-shadow)">
+    <path d="M309 77C326 77 339 78 357 90C383 107 396 135 392 163C391 202 365 234 328 242C291 251 253 235 235 205C217 176 220 142 234 117C250 88 280 73 309 77Z" fill="url(#fruit)" filter="url(#pores)"/>
+    <path d="M309 77C326 77 339 78 357 90C383 107 396 135 392 163C391 202 365 234 328 242C291 251 253 235 235 205C217 176 220 142 234 117C250 88 280 73 309 77Z" fill="url(#fruit-light)"/>
+    <g clip-path="url(#fruit-clip)" fill="#D96111" opacity=".2">
+      <circle cx="337" cy="110" r=".8"/><circle cx="362" cy="132" r=".9"/><circle cx="332" cy="139" r=".6"/><circle cx="351" cy="159" r=".8"/><circle cx="371" cy="174" r=".9"/><circle cx="362" cy="191" r=".6"/><circle cx="325" cy="196" r=".7"/><circle cx="304" cy="222" r=".8"/><circle cx="346" cy="217" r=".7"/><circle cx="287" cy="119" r=".7"/><circle cx="265" cy="147" r=".7"/><circle cx="310" cy="165" r=".8"/><circle cx="280" cy="187" r=".6"/><circle cx="298" cy="146" r=".7"/><circle cx="376" cy="151" r=".7"/><circle cx="341" cy="184" r=".8"/><circle cx="319" cy="117" r=".7"/><circle cx="250" cy="179" r=".7"/><circle cx="289" cy="207" r=".7"/><circle cx="349" cy="121" r=".7"/><circle cx="368" cy="212" r=".6"/>
+    </g>
+    <path d="M301 84C307 79 313 79 319 82" stroke="#C77928" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+    <path d="M308 80C311 68 307 62 303 56" stroke="#827247" stroke-width="5" stroke-linecap="round"/>
+    <path d="M309 73C311 49 336 30 363 34C362 58 340 76 309 73Z" fill="url(#leaf)"/>
+    <path d="M313 69C328 55 339 45 355 39" stroke="#B9D4B4" stroke-width="1.3" stroke-linecap="round" opacity=".6"/>
+    <path d="M331 54L332 43M337 51L350 51" stroke="#C9DCC0" stroke-width=".7" opacity=".4"/>
+  </g>
+  <path d="M420 156C393 183 337 207 275 222C212 238 150 241 132 227C123 220 126 212 137 205" stroke="url(#orbit)" stroke-width="1.6" stroke-linecap="round"/>
+  <g filter="url(#shield-shadow)">
+    <path d="M234 128L290 152L292 204C293 239 265 265 240 279C212 266 179 241 177 207L175 156L234 128Z" fill="url(#glass-side)"/>
+    <path d="M228 125L285 149L286 201C287 237 259 262 234 276C205 263 173 238 171 205L169 153L228 125Z" fill="url(#glass)" stroke="url(#glass-edge)" stroke-width="2"/>
+    <path d="M230 136L275 155L276 200C277 230 254 253 234 265C210 253 184 232 182 204L180 160L230 136Z" stroke="white" stroke-opacity=".58" stroke-width="1"/>
+    <path d="M179 155L228 134L277 154" stroke="white" stroke-width="2" stroke-linecap="round" opacity=".72"/>
+    <g filter="url(#lock-shadow)">
+      <path d="M216 202L215.8 190C215.7 180.8 222.8 174.8 231.5 175C240.2 175.2 247 181.8 247.2 190.4L247.5 202" stroke="url(#lock)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M217 201L216.8 190C216.7 182.2 223 177 231 177.1" stroke="#B9E1FF" stroke-width="1.2" stroke-linecap="round" opacity=".75"/>
+      <rect x="209" y="197" width="47" height="39" rx="10" transform="rotate(1.5 209 197)" fill="url(#lock)"/>
+      <rect x="210" y="198" width="45" height="37" rx="9" transform="rotate(1.5 210 198)" stroke="#D1EEFF" stroke-opacity=".4"/>
+      <path d="M233 210C230.2 209.9 228 212 228 214.7C228 216.5 229 218.1 230.6 218.9L230.4 224.1C230.4 225.2 231.3 226 232.4 226.1C233.5 226.1 234.3 225.3 234.4 224.2L234.5 219C236.1 218.3 237.1 216.8 237.2 214.9C237.2 212.2 235.5 210.1 233 210Z" fill="#DFF3FF"/>
+    </g>
+    <path d="M183 168L184 202C185 224 198 241 214 252" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity=".35"/>
+  </g>
+  <circle cx="406" cy="230" r="19" fill="url(#sphere)"/>
+  <g filter="url(#card-shadow)" transform="rotate(-12 372 256)">
+    <rect x="333" y="234" width="95" height="50" rx="13" fill="url(#card)" stroke="white" stroke-width="1.5"/>
+    <rect x="341" y="243" width="30" height="30" rx="9" fill="#E1EDFA"/>
+    <path d="M353 255.5C352.9 253.4 354.6 251.6 356.7 251.6C358.8 251.5 360.6 253.2 360.6 255.3C360.7 257.4 359 259.2 356.9 259.3C356 259.3 355.3 259 354.6 258.6L350.1 263.2M350.1 263.2L347.9 261M350.1 263.2L351.9 265" stroke="#428AD2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="381" cy="260" r="2.1" fill="#6485AC"/><circle cx="390" cy="260" r="2.1" fill="#6485AC"/><circle cx="399" cy="260" r="2.1" fill="#6485AC"/><circle cx="408" cy="260" r="2.1" fill="#6485AC"/>
+  </g>
+  <g transform="rotate(12 140 165)">
+    <rect x="124" y="149" width="31" height="31" rx="10" fill="#F5F9FF" stroke="white" stroke-width="1.4"/>
+    <path d="M133 165L138 170L147 159" stroke="#70A6DC" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

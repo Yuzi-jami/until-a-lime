@@ -63,6 +63,32 @@ test("new accounts send a create id and persist the entered password", async () 
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
+test("statistics view uses counts and scores without showing password warnings", async () => {
+  ipc.invoke.mockImplementation(async (command: string) => {
+    if (command === "vault_strengths") return [{ id: entry.id, score: 6 }];
+  });
+  const user = userEvent.setup();
+  render(<App initialEntries={[entry]} persistent onVaultLock={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "密码统计" }));
+  expect(await screen.findByRole("heading", { name: "强度分布" })).toBeTruthy();
+  expect(
+    screen.getAllByText("全部密码")[1].parentElement?.textContent,
+  ).toContain("1");
+  expect(screen.getByText("5–6")).toBeTruthy();
+  expect(screen.queryByText(/弱密码|泄露监测|立即处理|快熟了|青涩/)).toBeNull();
+});
+
+test("sidebar opens browser setup and collection settings as full pages", async () => {
+  const user = userEvent.setup();
+  render(<App initialEntries={[entry]} onVaultLock={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "浏览器插件" }));
+  expect(
+    screen.getByRole("heading", { name: "把收藏带到浏览器。" }),
+  ).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "设置" }));
+  expect(screen.getByRole("heading", { name: "收藏室设置" })).toBeTruthy();
+});
+
 test("backup recovery uses explicit recovery mode and requires its master password", async () => {
   ipc.invoke.mockImplementation(async (command: string) => {
     if (command === "vault_status")

@@ -1,3 +1,8 @@
+import BrowserSetup from "./BrowserSetup";
+import PasswordStatistics, {
+  OrangeStrength,
+  type Strength,
+} from "./VaultInsights";
 import SteamFillPanel from "./SteamFillPanel";
 import SettingsPanel from "./SettingsPanel";
 import { useTheme, useAutoLockPreference } from "./usePreferences";
@@ -47,6 +52,12 @@ export default function App({
   persistent?: boolean;
   onVaultLock?: () => void;
 } = {}) {
+  const [page, setPage] = useState<
+    "vault" | "browser" | "statistics" | "settings"
+  >("vault");
+  const [strengths, setStrengths] = useState<Strength[]>([]);
+  const [strengthPending, setStrengthPending] = useState(false);
+  const [strengthError, setStrengthError] = useState("");
   const [entries, setEntries] = useState<Entry[]>(initialEntries),
     [selected, setSelected] = useState(1),
     [filter, setFilter] = useState<Filter>("all");
@@ -105,6 +116,7 @@ export default function App({
       if (event.payload === "search" || event.payload === "generate")
         setDialog({ kind: event.payload });
       if (event.payload === "vault") {
+        setPage("vault");
         setDialog(null);
         setFilter("all");
         setQuery("");
@@ -209,7 +221,46 @@ export default function App({
     setSecret("");
     secretRequest.current++;
   }, [current?.id]);
-  const title = navigation.find((n) => n.id === filter)!.label;
+  useEffect(() => {
+    let cancelled = false;
+    setStrengths([]);
+    setStrengthError("");
+    if (!persistent) {
+      setStrengths(
+        entries.map((entry) => ({
+          id: entry.id,
+          score: [8, 6, 4, 7, 3, 5][(entry.id - 1) % 6],
+        })),
+      );
+      return;
+    }
+    if (locked) return;
+    setStrengthPending(true);
+    void invoke<Strength[]>("vault_strengths")
+      .then((values) => {
+        if (!cancelled) setStrengths(values ?? []);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setStrengthError("暂时无法读取强度分布，请稍后重新打开。");
+      })
+      .finally(() => {
+        if (!cancelled) setStrengthPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entries, persistent, locked]);
+  const title =
+    page === "vault"
+      ? navigation.find((n) => n.id === filter)!.label
+      : (
+          {
+            browser: "浏览器插件",
+            statistics: "密码统计",
+            settings: "设置",
+          } as const
+        )[page];
   const select = (entry: Entry) => {
     setSelected(entry.id);
     setShown(false);
@@ -319,6 +370,7 @@ export default function App({
   const action = (a: WheelAction) => {
     if (a === "lock") lock();
     else if (a === "vault") {
+      setPage("vault");
       setFilter("all");
       setQuery("");
       searchRef.current?.focus();
@@ -407,7 +459,7 @@ export default function App({
     );
   return (
     <>
-      <div className="app">
+      <div className="app workspace">
         <aside className="sidebar">
           <a
             className="brand"
@@ -429,24 +481,53 @@ export default function App({
             私人收藏室 <span>VOL. 01</span>
           </div>
           <nav aria-label="主要导航">
-            {navigation.map((n, i) => (
-              <div key={n.id} className="nav-item">
-                {i === 3 && (
-                  <div className="nav-label">分 类 / COLLECTIONS</div>
-                )}
-                <button
-                  className={`nav ${filter === n.id ? "active" : ""}`}
-                  onClick={() => setFilter(n.id)}
-                >
-                  <span>{n.icon}</span>
-                  {n.label}
-                  {n.id === "all" && <b>{entries.length}</b>}
-                  {n.id === "favorite" && (
-                    <b>{entries.filter((e) => e.favorite).length}</b>
-                  )}
-                </button>
-              </div>
+            {navigation
+              .filter((n) => n.id === "all" || n.id === "favorite")
+              .map((n) => (
+                <div key={n.id} className="nav-item">
+                  <button
+                    className={`nav ${page === "vault" && filter === n.id ? "active" : ""}`}
+                    aria-current={
+                      page === "vault" && filter === n.id ? "page" : undefined
+                    }
+                    onClick={() => {
+                      setPage("vault");
+                      setFilter(n.id);
+                    }}
+                  >
+                    <span>{n.icon}</span>
+                    {n.label}
+                    {n.id === "all" && <b>{entries.length}</b>}
+                    {n.id === "favorite" && (
+                      <b>{entries.filter((e) => e.favorite).length}</b>
+                    )}
+                  </button>
+                </div>
+              ))}
+            <div className="nav-label">工具 / TOOLS</div>
+            {(
+              [
+                ["browser", "◎", "浏览器插件"],
+                ["statistics", "▥", "密码统计"],
+                ["settings", "⚙", "设置"],
+              ] as const
+            ).map(([id, icon, label]) => (
+              <button
+                key={id}
+                className={`nav ${page === id ? "active" : ""}`}
+                aria-current={page === id ? "page" : undefined}
+                onClick={() => setPage(id)}
+              >
+                <span aria-hidden="true">{icon}</span>
+                {label}
+              </button>
             ))}
+            <button
+              className="nav"
+              onClick={() => setDialog({ kind: "generate" })}
+            >
+              <span aria-hidden="true">↻</span>密码生成器
+            </button>
           </nav>
           <div className="sidebar-bottom">
             <button
@@ -454,9 +535,6 @@ export default function App({
               onClick={() => changeTheme(dark ? "light" : "dark")}
             >
               ◐ <span>切换深浅色</span>
-            </button>
-            <button onClick={() => setDialog({ kind: "settings" })}>
-              ⚙ <span>收藏室设置</span>
             </button>
             <button onClick={lock}>
               ⌑ <span>锁定收藏室</span>
@@ -491,194 +569,224 @@ export default function App({
               ?
             </button>
           </header>
-          <section className="hero">
-            <div className="hero-copy">
-              <div className="eyebrow">
-                A SMALL PLACE FOR YOUR SECRETS / 001
-              </div>
-              <h1>
-                把秘密，
-                <br />
-                收藏成一颗酸橙<span>。</span>
-              </h1>
-              <p>在纷繁的世界里，留一小块只属于你的地方。</p>
-              <div className="hero-foot">
-                <span className="tiny-cross">＋</span> UNTIL PASSWORDS BECOME A
-                LIME <span>↗</span>
-              </div>
+          {page === "browser" && (
+            <div className="workspace-page">
+              <BrowserSetup />
             </div>
-            <div className="hero-art" aria-hidden="true">
-              <div className="art-orbit" />
-              <div className="art-grid" />
-              <div className="lime-disc">
-                <OrangeMark />
-              </div>
-              <span className="art-label">
-                CITRUS
-                <br />
-                ARCHIVE.
-              </span>
-              <span className="art-caption">一枚酸橙 / 一整个秘密宇宙</span>
-              <span className="art-no">01 — ∞</span>
+          )}
+          {page === "statistics" && (
+            <PasswordStatistics
+              entries={entries}
+              strengths={strengths}
+              pending={strengthPending}
+              error={strengthError}
+              persistent={persistent}
+            />
+          )}
+          {page === "settings" && (
+            <div className="workspace-page">
+              <SettingsPanel
+                onImported={(updated) => {
+                  setEntries(updated);
+                  setDeleted(null);
+                  setSecret("");
+                  setShown(false);
+                  secretRequest.current++;
+                }}
+                theme={theme}
+                onTheme={changeTheme}
+                minutes={minutes}
+                onMinutes={changeMinutes}
+                persistent={persistent}
+              />
             </div>
-          </section>
-          <section className="vault">
-            {operationError && !dialog && (
-              <p role="alert" className="operation-error">
-                {operationError}
-              </p>
-            )}
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">YOUR COLLECTION</span>
-                <h2>
-                  {title} <small>{String(list.length).padStart(2, "0")}</small>
-                </h2>
-              </div>
-              <button
-                className="primary"
-                onClick={() => setDialog({ kind: "edit" })}
-              >
-                ＋ 添加账号
-              </button>
-            </div>
-            <div className="toolbar">
-              <label className="search">
-                <span>⌕</span>
-                <input
-                  ref={searchRef}
-                  type="search"
-                  aria-label="搜索账号"
-                  placeholder="寻找一个账号、一段秘密…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <kbd>Ctrl K</kbd>
-              </label>
-              <select
-                aria-label="账号排序"
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-              >
-                <option value="default">默认排序</option>
-                <option value="name">名称排序</option>
-              </select>
-            </div>
-            <div className="collection">
-              <div className="list-column">
-                <div className="list-header">
-                  <span>账号 / ACCOUNT</span>
-                  <span>分类</span>
-                </div>
-                <div>
-                  {list.map((entry) => (
-                    <AccountRow
-                      key={entry.id}
-                      entry={entry}
-                      selected={current?.id === entry.id}
-                      onSelect={() => select(entry)}
-                    />
-                  ))}
-                  {list.length === 0 && (
-                    <div className="empty">
-                      这里还没有酸橙。<p>试试其他关键词，或添加演示账号。</p>
-                      <button
-                        className="empty-add"
-                        onClick={() => setDialog({ kind: "edit" })}
-                      >
-                        ＋ 添加账号
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="list-footer">
-                  {persistent
-                    ? "账号更改自动加密保存"
-                    : "账号改动仅在本次会话中生效"}{" "}
-                  <span>＋</span>
-                </div>
-              </div>
-              <article className="detail">
-                {current ? (
-                  <>
-                    <div className="detail-heading">
-                      <span className="account-icon">{current.icon}</span>
-                      <div>
-                        <h3>{current.name}</h3>
-                        <small>
-                          COLLECTION / {String(current.id).padStart(3, "0")}
-                        </small>
-                      </div>
-                      <button
-                        className="star"
-                        aria-label={current.favorite ? "取消收藏" : "收藏账号"}
-                        disabled={saving}
-                        onClick={() => void favorite(current)}
-                      >
-                        {current.favorite ? "★" : "☆"}
-                      </button>
-                    </div>
-                    <hr />
-                    <div className="field-label">用户名</div>
-                    <div className="field">
-                      <span className="field-value">{current.user}</span>
-                      <button onClick={() => void copyField("user")}>
-                        复制
-                      </button>
-                    </div>
-                    <div className="field-label">
-                      密码{!persistent && " · 演示值"}
-                    </div>
-                    <div className="field">
-                      <span className="field-value">
-                        {shown
-                          ? persistent
-                            ? secret
-                            : "Lime-demo-only-2026!"
-                          : "•••• •••• •••• ••••"}
-                      </span>
-                      <button onClick={() => void reveal()}>
-                        {shown ? "隐藏" : "显示"}
-                      </button>
-                      <button onClick={() => void copyField("password")}>
-                        复制
-                      </button>
-                    </div>
-                    <div className="field-label">网站</div>
-                    <div className="field">
-                      <span className="field-value">{current.url}</span>
-                      <span>↗</span>
-                    </div>
-                    <div className="field-label">便笺</div>
-                    <p className="note">{current.note}</p>
-                    {persistent && <SteamFillPanel id={current.id} />}
-                    <div className="detail-bottom">
-                      <button onClick={() => setDialog({ kind: "search" })}>
-                        快捷搜索 ↗
-                      </button>
-                      <button
-                        onClick={() =>
-                          setDialog({ kind: "edit", entry: current })
-                        }
-                      >
-                        编辑记录
-                      </button>
+          )}
+          {page === "vault" && (
+            <section className="vault">
+              {operationError && !dialog && (
+                <p role="alert" className="operation-error">
+                  {operationError}
+                </p>
+              )}
+              <div className="collection">
+                <div className="list-column">
+                  <div className="section-heading">
+                    <div>
+                      <span className="eyebrow">YOUR COLLECTION</span>
+                      <h2>
+                        {title}{" "}
+                        <small>{String(list.length).padStart(2, "0")}</small>
+                      </h2>
                     </div>
                     <button
-                      className="delete-entry"
-                      onClick={() =>
-                        setDialog({ kind: "delete", entry: current })
-                      }
+                      className="primary"
+                      onClick={() => setDialog({ kind: "edit" })}
                     >
-                      删除账号
+                      ＋ 添加账号
                     </button>
-                  </>
-                ) : (
-                  <div className="empty">选一个账号，看看它的故事。</div>
-                )}
-              </article>
-            </div>
-          </section>
+                  </div>
+                  <div className="toolbar">
+                    <label className="search">
+                      <span>⌕</span>
+                      <input
+                        ref={searchRef}
+                        type="search"
+                        aria-label="搜索账号"
+                        placeholder="搜索网站或账号"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                      <kbd>Ctrl K</kbd>
+                    </label>
+                    <select
+                      aria-label="账号排序"
+                      value={sort}
+                      onChange={(e) => setSort(e.target.value)}
+                    >
+                      <option value="default">默认排序</option>
+                      <option value="name">名称排序</option>
+                    </select>
+                  </div>
+                  <div className="category-tabs" aria-label="账号分类">
+                    {["all", "工作", "生活", "娱乐", "recent"].map((id) => (
+                      <button
+                        key={id}
+                        aria-pressed={filter === id}
+                        className={filter === id ? "selected" : ""}
+                        onClick={() => setFilter(id as Filter)}
+                      >
+                        {id === "all" ? "全部" : id === "recent" ? "最近" : id}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="list-header">
+                    <span>账号 / ACCOUNT</span>
+                    <span>分类</span>
+                  </div>
+                  <div>
+                    {list.map((entry) => (
+                      <AccountRow
+                        key={entry.id}
+                        entry={entry}
+                        selected={current?.id === entry.id}
+                        onSelect={() => select(entry)}
+                      />
+                    ))}
+                    {list.length === 0 && (
+                      <div className="empty">
+                        这里还没有账号。<p>试试其他关键词，或添加一个账号。</p>
+                        <button
+                          className="empty-add"
+                          onClick={() => setDialog({ kind: "edit" })}
+                        >
+                          ＋ 添加账号
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="list-footer">
+                    {persistent
+                      ? "账号更改自动加密保存"
+                      : "账号改动仅在本次会话中生效"}{" "}
+                    <span>＋</span>
+                  </div>
+                </div>
+                <article className="detail">
+                  {current ? (
+                    <>
+                      <div className="detail-heading">
+                        <span className="account-icon">{current.icon}</span>
+                        <div>
+                          <h3>{current.name}</h3>
+                          <small>
+                            COLLECTION / {String(current.id).padStart(3, "0")}
+                          </small>
+                        </div>
+                        <button
+                          className="star"
+                          aria-label={
+                            current.favorite ? "取消收藏" : "收藏账号"
+                          }
+                          disabled={saving}
+                          onClick={() => void favorite(current)}
+                        >
+                          {current.favorite ? "★" : "☆"}
+                        </button>
+                      </div>
+                      <div className="credential-overview">
+                        <div className="credential-fields">
+                          <div className="field-label">用户名</div>
+                          <div className="field">
+                            <span className="field-value">{current.user}</span>
+                            <button onClick={() => void copyField("user")}>
+                              复制
+                            </button>
+                          </div>
+                          <div className="field-label">
+                            密码{!persistent && " · 演示值"}
+                          </div>
+                          <div className="field">
+                            <span className="field-value">
+                              {shown
+                                ? persistent
+                                  ? secret
+                                  : "Lime-demo-only-2026!"
+                                : "•••• •••• •••• ••••"}
+                            </span>
+                            <button onClick={() => void reveal()}>
+                              {shown ? "隐藏" : "显示"}
+                            </button>
+                            <button onClick={() => void copyField("password")}>
+                              复制
+                            </button>
+                          </div>
+                        </div>
+                        <div className="strength-card">
+                          <OrangeStrength
+                            score={
+                              strengths.find((s) => s.id === current.id)?.score
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="detail-metadata">
+                        <div className="field-label">网站</div>
+                        <div className="field">
+                          <span className="field-value">{current.url}</span>
+                          <span>↗</span>
+                        </div>
+                        <div className="field-label">便笺</div>
+                        <p className="note">{current.note}</p>
+                      </div>
+                      {persistent && <SteamFillPanel id={current.id} />}
+                      <div className="detail-bottom">
+                        <button onClick={() => setDialog({ kind: "search" })}>
+                          快捷搜索 ↗
+                        </button>
+                        <button
+                          onClick={() =>
+                            setDialog({ kind: "edit", entry: current })
+                          }
+                        >
+                          编辑记录
+                        </button>
+                      </div>
+                      <button
+                        className="delete-entry"
+                        onClick={() =>
+                          setDialog({ kind: "delete", entry: current })
+                        }
+                      >
+                        删除账号
+                      </button>
+                    </>
+                  ) : (
+                    <div className="empty">选一个账号，看看它的故事。</div>
+                  )}
+                </article>
+              </div>
+            </section>
+          )}
           <footer className="page-footer">
             <span>把复杂留给世界，把简单留给自己。</span>
             <span>LIME / DESIGN STUDY — 2026</span>
@@ -738,6 +846,7 @@ export default function App({
             <QuickSearch
               entries={entries}
               onSelect={(entry) => {
+                setPage("vault");
                 setFilter("all");
                 setQuery("");
                 select(entry);

@@ -610,6 +610,15 @@ pub fn vault_list(window: tauri::WebviewWindow) -> Result<Vec<Metadata>, String>
         .access(|vault| Ok(vault.list()))
 }
 #[tauri::command]
+pub fn vault_strengths(
+    window: tauri::WebviewWindow,
+) -> Result<Vec<crate::vault::Strength>, String> {
+    require_main(&window)?;
+    window
+        .state::<VaultService>()
+        .access(|vault| Ok(vault.strengths()))
+}
+#[tauri::command]
 pub fn vault_save(
     window: tauri::WebviewWindow,
     entry: Metadata,

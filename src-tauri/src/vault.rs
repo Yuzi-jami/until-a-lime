@@ -21,6 +21,46 @@ const MAX_FILE: usize = 8 * 1024 * 1024;
 const MAX_ENTRIES: usize = 2000;
 pub type Result<T> = std::result::Result<T, String>;
 
+#[derive(Serialize)]
+pub struct Strength {
+    pub id: u32,
+    pub score: u8,
+}
+
+// A bounded visual estimate, not entropy, breach detection or a safety verdict.
+fn strength_score(password: &str) -> u8 {
+    let length = password.chars().count();
+    if length == 0 {
+        return 0;
+    }
+    let unique = password.chars().collect::<HashSet<_>>().len();
+    let kinds = [
+        password.chars().any(|c| c.is_lowercase()),
+        password.chars().any(|c| c.is_uppercase()),
+        password.chars().any(|c| c.is_numeric()),
+        password.chars().any(|c| !c.is_alphanumeric()),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    let mut score = (length / 4 + kinds.saturating_sub(1)).clamp(1, 8) as u8;
+    if length < 8 {
+        score = score.min(2);
+    }
+    if unique < 5 || unique * 3 < length {
+        score = score.min(2);
+    }
+    // Common sequences and dictionary samples should not appear as full fruit.
+    let lower = Zeroizing::new(password.to_lowercase());
+    if ["password", "qwerty", "123456", "abcdef", "letmein"]
+        .iter()
+        .any(|word| lower.contains(word))
+    {
+        score = score.min(2);
+    }
+    score
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Metadata {
@@ -378,6 +418,16 @@ impl Vault {
             .map(|record| record.meta.clone())
             .collect()
     }
+    pub fn strengths(&self) -> Vec<Strength> {
+        self.data
+            .records
+            .iter()
+            .map(|record| Strength {
+                id: record.meta.id,
+                score: strength_score(&record.password),
+            })
+            .collect()
+    }
     pub fn secret(&self, id: u32) -> Result<Zeroizing<String>> {
         self.data
             .records
@@ -455,6 +505,15 @@ impl Vault {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strength_score_is_bounded_and_never_exposes_password_content() {
+        assert_eq!(strength_score(""), 0);
+        assert!(strength_score("123456") <= 2);
+        assert!(strength_score("password-123") <= 2);
+        assert!(strength_score("X7!kP2#vN9@q") >= 6);
+        assert!(strength_score("这是一个很长的中文密码🙂安全") <= 8);
+    }
     fn meta() -> Metadata {
         Metadata {
             id: 0,

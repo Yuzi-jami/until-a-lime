@@ -1,1 +1,15 @@
-{"identifier":"main-preview","description":"Main demo window may listen for local navigation events; no filesystem, shell, clipboard or input permissions","windows":["main"],"permissions":["core:event:allow-listen","core:event:allow-unlisten"]}
+{
+  "identifier": "main-preview",
+  "description": "Main demo window may listen for local navigation events; no filesystem, shell, clipboard or input permissions",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-start-dragging"
+  ]
+}

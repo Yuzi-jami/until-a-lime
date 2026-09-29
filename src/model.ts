@@ -73,8 +73,8 @@ export const demoEntries: Entry[] = [
   },
 ];
 export const navigation: { id: Filter; label: string; icon: string }[] = [
-  { id: "all", label: "全部账号", icon: "▦" },
-  { id: "favorite", label: "我的收藏", icon: "☆" },
+  { id: "all", label: "全部密码", icon: "▦" },
+  { id: "favorite", label: "收藏密码", icon: "☆" },
   { id: "recent", label: "最近使用", icon: "◷" },
   { id: "工作", label: "工作与创作", icon: "◈" },
   { id: "生活", label: "日常生活", icon: "◉" },

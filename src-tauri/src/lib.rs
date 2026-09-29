@@ -216,6 +216,7 @@ pub fn run() {
             vault_service::vault_lock,
             vault_service::vault_touch,
             vault_service::vault_list,
+            vault_service::vault_strengths,
             vault_service::vault_save,
             vault_service::vault_delete,
             vault_service::vault_undo,
