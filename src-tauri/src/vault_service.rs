@@ -35,6 +35,10 @@ pub struct Status {
     backup: bool,
 }
 impl VaultService {
+    pub(crate) fn floating_entries(&self) -> Result<Vec<Metadata>, String> {
+        self.access(|vault| Ok(vault.list()))
+    }
+
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -151,7 +155,7 @@ impl VaultService {
 }
 
 impl VaultService {
-    pub(crate) fn steam_epoch(&self, id: u32) -> Result<u64, String> {
+    pub(crate) fn floating_epoch(&self, id: u32) -> Result<u64, String> {
         let state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
         if state.busy || Self::expired(&state) {
             return Err("请先验证密码库。".into());
@@ -162,7 +166,7 @@ impl VaultService {
         }
         Ok(state.epoch)
     }
-    pub(crate) fn with_steam_field<T>(
+    pub(crate) fn with_floating_field<T>(
         &self,
         epoch: u64,
         id: u32,
@@ -211,6 +215,7 @@ impl VaultService {
                                 id: e.id,
                                 name: e.name.clone(),
                                 user: e.user.clone(),
+                                site: crate::browser_bridge::site_label(&e.url),
                             })
                             .collect(),
                     ),
@@ -313,6 +318,7 @@ pub struct CsvPreview {
     name: String,
     added: usize,
     skipped: usize,
+    without_username: usize,
 }
 #[derive(serde::Serialize)]
 pub struct CsvResult {
@@ -357,6 +363,7 @@ pub async fn vault_choose_csv(window: tauri::WebviewWindow) -> Result<Option<Csv
         .as_ref()
         .ok_or("请先验证主密码。")?
         .csv_counts(&rows);
+    let without_username = rows.iter().filter(|row| row.meta.user.is_empty()).count();
     let mut random = [0; 16];
     rand_core::OsRng
         .try_fill_bytes(&mut random)
@@ -372,6 +379,7 @@ pub async fn vault_choose_csv(window: tauri::WebviewWindow) -> Result<Option<Csv
         name,
         added,
         skipped,
+        without_username,
     }))
 }
 #[tauri::command]
@@ -532,10 +540,11 @@ fn require_main(window: &tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 pub fn lock_all(app: &tauri::AppHandle) {
-    app.state::<crate::steam_fill::SteamFill>().cancel();
+    app.state::<crate::quick_paste::QuickPaste>().cancel();
     app.state::<VaultService>().lock();
     app.state::<ClipboardService>().clear(app, true);
     let _ = app.emit_to("main", "lime-action", "lock");
+    let _ = app.emit_to("floating", "lime-action", "lock");
 }
 #[tauri::command]
 pub fn vault_status(window: tauri::WebviewWindow) -> Result<Status, String> {
@@ -586,7 +595,7 @@ pub fn vault_lock(window: tauri::WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 pub fn vault_touch(window: tauri::WebviewWindow, minutes: u32) -> Result<(), String> {
     require_main(&window)?;
-    if !matches!(minutes, 0 | 1 | 5 | 15) {
+    if minutes > 1440 {
         return Err("锁定时间无效。".into());
     }
     let service = window.state::<VaultService>();
@@ -679,7 +688,7 @@ pub fn vault_copy(window: tauri::WebviewWindow, id: u32, field: String) -> Resul
 mod tests {
     use super::*;
     #[test]
-    fn browser_access_requires_valid_session_and_exact_site_and_csv_ticket_dies_on_lock() {
+    fn browser_access_requires_valid_session_and_same_site_and_csv_ticket_dies_on_lock() {
         use crate::browser_protocol::Request;
         let dir = tempfile::tempdir().unwrap();
         let service = VaultService::new(dir.path().join("vault.lime"));
@@ -699,6 +708,24 @@ mod tests {
         )
         .unwrap();
         service.access(|v| v.import_csv(&rows)).unwrap();
+        assert_eq!(
+            service
+                .browser_request(request("list", "https://login.example.invalid", None))
+                .unwrap()
+                .entries
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            service
+                .browser_request(request("fill", "https://login.example.invalid", Some(1)))
+                .unwrap()
+                .credential
+                .unwrap()
+                .password,
+            "test-value"
+        );
         assert_eq!(
             service
                 .browser_request(request("list", "https://example.invalid", None))
@@ -738,31 +765,31 @@ mod tests {
     fn steam_request_never_executes_after_lock_or_with_invalid_field() {
         let dir = tempfile::tempdir().unwrap();
         let service = VaultService::new(dir.path().join("vault.lime"));
-        assert!(service.steam_epoch(1).is_err());
+        assert!(service.floating_epoch(1).is_err());
         service
             .authenticate(Zeroizing::new("fictional-master-only".into()), true, false)
             .unwrap();
         let rows = crate::browser_csv::parse(b"url,username,password\nhttps://store.steampowered.com,fictional-user,fictional-password\n").unwrap();
         service.access(|v| v.import_csv(&rows)).unwrap();
-        let epoch = service.steam_epoch(1).unwrap();
+        let epoch = service.floating_epoch(1).unwrap();
         assert!(service
-            .with_steam_field::<()>(epoch, 1, "both", |_| panic!("must not execute"))
+            .with_floating_field::<()>(epoch, 1, "both", |_| panic!("must not execute"))
             .is_err());
         assert_eq!(
             service
-                .with_steam_field(epoch, 1, "user", |s| Ok(s.to_string()))
+                .with_floating_field(epoch, 1, "user", |s| Ok(s.to_string()))
                 .unwrap(),
             "fictional-user"
         );
         service.lock();
         assert!(service
-            .with_steam_field::<()>(epoch, 1, "password", |_| panic!("must not execute"))
+            .with_floating_field::<()>(epoch, 1, "password", |_| panic!("must not execute"))
             .is_err());
         service
             .authenticate(Zeroizing::new("fictional-master-only".into()), false, false)
             .unwrap();
         assert!(service
-            .with_steam_field::<()>(epoch, 1, "password", |_| panic!(
+            .with_floating_field::<()>(epoch, 1, "password", |_| panic!(
                 "old request must not execute"
             ))
             .is_err());
@@ -882,6 +909,14 @@ mod tests {
         assert!(service.access(|vault| Ok(vault.list())).is_ok());
         {
             let mut state = service.state.lock().unwrap();
+            for minutes in [90, 120, 480, 1440] {
+                state.minutes = minutes;
+                state.last = SystemTime::now() - Duration::from_secs(u64::from(minutes) * 60 - 2);
+                assert!(!VaultService::expired(&state));
+                state.last = SystemTime::now() - Duration::from_secs(u64::from(minutes) * 60);
+                assert!(VaultService::expired(&state));
+            }
+            state.minutes = 5;
             state.import_file = Some((
                 "stale-ticket".into(),
                 dir.path().join("unused.lime"),

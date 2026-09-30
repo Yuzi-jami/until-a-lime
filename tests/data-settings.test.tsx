@@ -108,6 +108,7 @@ test("CSV previews counts then commits only its ticket; cancel never commits", a
         name: "fictional.csv",
         added: 2,
         skipped: 1,
+        without_username: 1,
       };
     if (command === "vault_commit_csv")
       return { entries: [], added: 2, skipped: 1 };
@@ -115,6 +116,7 @@ test("CSV previews counts then commits only its ticket; cancel never commits", a
   render(<CsvImportPanel onImported={imported} />);
   await user.click(screen.getByRole("button", { name: "选择浏览器 CSV" }));
   await screen.findByText("fictional.csv");
+  expect(screen.getByText(/1 条记录未提供用户名/)).toBeTruthy();
   expect(ipc.invoke.mock.calls.some((c) => c[0] === "vault_commit_csv")).toBe(
     false,
   );

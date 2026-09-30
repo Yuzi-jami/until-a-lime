@@ -11,3 +11,9 @@ test('idle timeout checks boundaries, long suspension and backwards clocks',()=>
  assert.ok(idleExpired(1000,3600000,5));assert.ok(idleExpired(1000,0,5));
  assert.ok(!idleExpired(1000,3600000,0));
 });
+test('hour and custom idle durations persist and reject malformed preferences',()=>{
+ for (const value of [30,60,90,120,240,480,1440]) assert.equal(parseAutoLock(String(value)),value);
+ for (const value of ['-1','1.5','1441','Infinity','',' 60','1e2']) assert.equal(parseAutoLock(value),5);
+ assert.equal(idleExpired(1000,1000+120*60000-1,120),false);
+ assert.equal(idleExpired(1000,1000+120*60000,120),true);
+});

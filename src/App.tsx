@@ -3,7 +3,6 @@ import PasswordStatistics, {
   OrangeStrength,
   type Strength,
 } from "./VaultInsights";
-import SteamFillPanel from "./SteamFillPanel";
 import SettingsPanel from "./SettingsPanel";
 import { useTheme, useAutoLockPreference } from "./usePreferences";
 import { useIdleLock } from "./useIdleLock";
@@ -758,7 +757,6 @@ export default function App({
                         <div className="field-label">便笺</div>
                         <p className="note">{current.note}</p>
                       </div>
-                      {persistent && <SteamFillPanel id={current.id} />}
                       <div className="detail-bottom">
                         <button onClick={() => setDialog({ kind: "search" })}>
                           快捷搜索 ↗
@@ -917,7 +915,8 @@ export default function App({
                 {runtime}。
               </p>
               <p>
-                桌面账号加密保存到本机，浏览器预览只保留演示数据。主题偏好和桌面轮盘位置会保存在本机。桌面版支持独立悬浮轮盘和托盘。关闭主窗口只隐藏到托盘并保持解锁；退出请使用托盘菜单；托盘也可重置轮盘位置。生成器支持复制及定时清理；账号密码按需显示和复制。尚未接入跨应用填写。
+                桌面账号加密保存到本机，浏览器预览只保留演示数据。主题偏好和桌面轮盘位置会保存在本机。桌面版支持独立悬浮轮盘和托盘。关闭主窗口只隐藏到托盘并保持解锁；退出请使用托盘菜单；托盘也可重置轮盘位置。生成器支持复制及定时清理；账号密码按需显示和复制。悬浮轮盘支持普通应用的剪贴板连续填写。QQ
+                等受保护输入框不接入。
               </p>
             </>
           )}
@@ -976,9 +975,9 @@ function EntryForm({
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const name = String(data.get("name")).trim(),
-      user = String(data.get("user")).trim();
-    if (!name || !user) {
-      setError("名称和用户名不能只包含空格。");
+      user = String(data.get("user"));
+    if (!name) {
+      setError("名称不能只包含空格。");
       return;
     }
     onSave(
@@ -989,8 +988,8 @@ function EntryForm({
         category: data.get("category") as Category,
         icon: entry?.icon ?? "L",
         favorite: entry?.favorite ?? false,
-        url: String(data.get("url")).trim() || "example.invalid",
-        note: String(data.get("note")).trim(),
+        url: String(data.get("url")),
+        note: String(data.get("note")),
       },
       persistent ? String(data.get("password")) || undefined : undefined,
     );
@@ -1011,7 +1010,7 @@ function EntryForm({
             <input
               name="name"
               autoFocus
-              maxLength={40}
+              maxLength={8192}
               required
               defaultValue={entry?.name}
             />
@@ -1020,8 +1019,8 @@ function EntryForm({
             用户名
             <input
               name="user"
-              maxLength={80}
-              required
+              maxLength={1024}
+              placeholder="可留空"
               defaultValue={entry?.user}
             />
           </label>
@@ -1050,14 +1049,18 @@ function EntryForm({
             网站
             <input
               name="url"
-              maxLength={160}
+              maxLength={8192}
               defaultValue={entry?.url}
               placeholder="example.invalid"
             />
           </label>
           <label>
             便笺
-            <textarea name="note" maxLength={240} defaultValue={entry?.note} />
+            <textarea
+              name="note"
+              maxLength={16384}
+              defaultValue={entry?.note}
+            />
           </label>
           {error && <p role="alert">{error}</p>}
           <button className="primary">

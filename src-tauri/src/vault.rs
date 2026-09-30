@@ -156,15 +156,20 @@ fn atomic_write(path: &Path, bytes: &[u8], create: bool) -> Result<()> {
 }
 pub(crate) fn validate(meta: &Metadata, password: Option<&str>) -> Result<()> {
     if meta.name.trim().is_empty()
-        || meta.user.trim().is_empty()
-        || meta.name.chars().count() > 40
-        || meta.user.chars().count() > 80
-        || meta.url.chars().count() > 160
-        || meta.note.chars().count() > 240
         || meta.icon.chars().count() > 8
         || !matches!(meta.category.as_str(), "工作" | "生活" | "娱乐")
     {
         return Err("账号字段无效或超出长度限制。".into());
+    }
+    for (label, value, limit) in [
+        ("名称", meta.name.as_str(), 8192),
+        ("用户名", meta.user.as_str(), 1024),
+        ("网址", meta.url.as_str(), 8192),
+        ("备注", meta.note.as_str(), 16384),
+    ] {
+        if value.chars().count() > limit {
+            return Err(format!("{label}超过 {limit} 字符限制。"));
+        }
     }
     if let Some(password) = password {
         if password.is_empty() || password.len() > 4096 {
@@ -556,6 +561,33 @@ mod tests {
         assert_eq!(vault.list().len(), 2);
         assert_eq!(std::fs::read(&path).unwrap(), b"externally changed");
         assert!(!original.windows(12).any(|w| w == b"new-password"));
+    }
+    #[test]
+    fn browser_optional_users_and_long_fields_survive_encryption_and_editing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("browser-compatibility.lime");
+        let master = "fictional-master-only";
+        let mut vault = Vault::create(path.clone(), master).unwrap();
+        let address = format!("http://example.invalid/login?return={}", "x".repeat(400));
+        let note = "测试备注".repeat(200);
+        let mut writer = csv::Writer::from_writer(Vec::new());
+        writer
+            .write_record(["name", "url", "username", "password", "note"])
+            .unwrap();
+        writer
+            .write_record(["测试导入", &address, "", " fictional-password ", &note])
+            .unwrap();
+        let rows = crate::browser_csv::parse(&writer.into_inner().unwrap()).unwrap();
+        assert_eq!(vault.import_csv(&rows).unwrap(), (1, 0));
+        drop(vault);
+        let mut reopened = Vault::open(path, master).unwrap();
+        let entry = reopened.list().remove(0);
+        assert!(entry.user.is_empty());
+        assert_eq!(entry.url, address);
+        assert_eq!(entry.note, note);
+        assert_eq!(&*reopened.secret(entry.id).unwrap(), " fictional-password ");
+        reopened.upsert(entry, None).unwrap();
+        assert_eq!(reopened.import_csv(&rows).unwrap(), (0, 1));
     }
     #[test]
     fn encrypted_lifecycle_and_recovery() {

@@ -5,8 +5,9 @@ mod browser_bridge;
 mod browser_csv;
 mod browser_protocol;
 mod clipboard;
+mod floating_layout;
 mod placement;
-mod steam_fill;
+mod quick_paste;
 mod vault;
 mod vault_service;
 
@@ -15,9 +16,10 @@ fn save_floating_placement(app: &tauri::AppHandle) -> Result<(), Box<dyn std::er
         .get_webview_window("floating")
         .ok_or("Floating window unavailable")?;
     let scale = window.scale_factor()?;
-    let size = window.inner_size()?;
     let position = window.outer_position()?;
-    let (_, _, center_x, center_y) = floating_geometry(f64::from(size.width) / scale > 180.0);
+    let state = app.state::<floating_layout::FloatingLayout>();
+    let state = state.0.lock().map_err(|_| "Floating state unavailable")?;
+    let (center_x, center_y) = state.anchor();
     let preference = placement::Placement::new(
         f64::from(position.x) + center_x * scale,
         f64::from(position.y) + center_y * scale,
@@ -51,9 +53,12 @@ fn restore_floating_placement(
         .ok_or("No monitor available")?;
     let scale = monitor.scale_factor();
     let area = monitor.work_area();
-    let size = window.inner_size()?;
-    let expanded = f64::from(size.width) / window.scale_factor()? > 180.0;
-    let (width, height, center_x, center_y) = floating_geometry(expanded);
+    let state = window.state::<floating_layout::FloatingLayout>();
+    let mut state = state.0.lock().map_err(|_| "Floating state unavailable")?;
+    state.edge = None;
+    state.cancel_motion();
+    let (width, height, center_x, center_y) = floating_layout::geometry(state.layout, None);
+    window.set_size(tauri::LogicalSize::new(width, height))?;
     // If the saved display was disconnected, use a visible default on primary.
     let center = saved.filter(|_| matching.is_some()).unwrap_or_else(|| {
         placement::Placement::new(
@@ -77,6 +82,7 @@ fn restore_floating_placement(
         x.round() as i32,
         y.round() as i32,
     ))?;
+    let _ = window.emit("lime-floating-reset", ());
     Ok(())
 }
 
@@ -128,15 +134,16 @@ fn show_floating(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), Str
 }
 
 #[tauri::command]
-fn drag_floating(window: WebviewWindow) -> Result<(), String> {
+async fn drag_floating(window: WebviewWindow) -> Result<(), String> {
     if window.label() != "floating" {
         return Err("Floating window required".into());
     }
-    window.start_dragging().map_err(|e| e.to_string())
+    floating_layout::drag_until_released(window).await
 }
 
 // Coordinates are logical pixels, matching the two CSS layouts. Preserve the
 // fruit's screen position while changing the surrounding navigation surface.
+#[cfg(test)]
 fn floating_geometry(expanded: bool) -> (f64, f64, f64, f64) {
     if expanded {
         (300.0, 310.0, 150.0, 138.0)
@@ -151,65 +158,50 @@ fn clamp_origin(origin: f64, start: f64, extent: f64, window: f64) -> f64 {
 
 #[tauri::command]
 fn resize_floating(window: WebviewWindow, expanded: bool) -> Result<(), String> {
-    if window.label() != "floating" {
-        return Err("Floating window required".into());
-    }
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let size = window.inner_size().map_err(|e| e.to_string())?;
-    let old_expanded = f64::from(size.width) / scale > 180.0;
-    if old_expanded == expanded {
-        return Ok(());
-    }
-    let position = window.outer_position().map_err(|e| e.to_string())?;
-    let (_, _, old_x, old_y) = floating_geometry(old_expanded);
-    let (width, height, center_x, center_y) = floating_geometry(expanded);
-    let mut x = f64::from(position.x) + (old_x - center_x) * scale;
-    let mut y = f64::from(position.y) + (old_y - center_y) * scale;
-    if let Some(monitor) = window.current_monitor().map_err(|e| e.to_string())? {
-        let area = monitor.work_area();
-        x = clamp_origin(
-            x,
-            f64::from(area.position.x),
-            f64::from(area.size.width),
-            width * scale,
-        );
-        y = clamp_origin(
-            y,
-            f64::from(area.position.y),
-            f64::from(area.size.height),
-            height * scale,
-        );
-    }
-    window
-        .set_size(tauri::LogicalSize::new(width, height))
-        .map_err(|e| e.to_string())?;
-    window
-        .set_position(tauri::PhysicalPosition::new(
-            x.round() as i32,
-            y.round() as i32,
-        ))
-        .map_err(|e| e.to_string())
+    floating_layout::floating_layout(
+        window,
+        if expanded {
+            floating_layout::Layout::Wheel
+        } else {
+            floating_layout::Layout::Compact
+        },
+        None,
+    )
+    .map(|_| ())
 }
 
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    if std::env::args().any(|arg| arg == "--browser-background") {
+        for window in &mut context.config_mut().app.windows {
+            window.visible = false;
+        }
+    }
     // This app does not depend on the old UIA/SendInput validation executable.
     tauri::Builder::default()
         // Register first: a second launch should never create windows or a tray.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if args.iter().any(|arg| arg == "--browser-background") {
+                return;
+            }
             if let Err(error) = show_main(app) {
                 eprintln!("Could not restore the existing window: {error}");
             }
         }))
         .invoke_handler(tauri::generate_handler![
             runtime_status,
-            steam_fill::steam_fill_arm,
-            steam_fill::steam_fill_cancel,
+            quick_paste::quick_paste_accounts,
+            quick_paste::quick_paste_arm,
+            quick_paste::quick_paste_cancel,
             browser_bridge::browser_install,
             browser_bridge::browser_disconnect,
             desktop_action,
             show_floating,
             drag_floating,
             resize_floating,
+            floating_layout::floating_layout,
+            floating_layout::prepare_floating_motion,
+            floating_layout::finish_floating_motion,
             clipboard::copy_generated_password,
             vault_service::vault_status,
             vault_service::vault_auth,
@@ -231,8 +223,9 @@ pub fn run() {
             vault_service::vault_change_password
         ])
         .setup(|app| {
+            app.manage(floating_layout::FloatingLayout::default());
             app.manage(clipboard::ClipboardService::start(app.handle().clone()));
-            app.manage(steam_fill::SteamFill::default());
+            app.manage(quick_paste::QuickPaste::default());
             let vault =
                 vault_service::VaultService::new(app.path().app_data_dir()?.join("vault.lime"));
             app.manage(vault.clone());
@@ -355,7 +348,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("Could not start the Lime desktop preview");
 }
 

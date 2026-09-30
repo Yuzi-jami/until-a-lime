@@ -38,9 +38,33 @@ export default function TitleBar() {
       <span className="window-name" data-tauri-drag-region>
         直到密码变成一颗酸橙
       </span>
-      <span className="window-caption" data-tauri-drag-region>
-        {native ? "PRIVATE COLLECTION" : "DESIGN PREVIEW"}
-      </span>
+      <div className="windows-controls" aria-label="Windows 窗口控制">
+        {(
+          [
+            ["minimize", "最小化窗口", "M4 8h8"],
+            ["toggleMaximize", "最大化或还原窗口", "M4 4h8v8H4z"],
+            ["close", "关闭窗口，收起到托盘", "M4 4l8 8M12 4l-8 8"],
+          ] as const
+        ).map(([action, label, path]) => (
+          <button
+            key={action}
+            className={`windows-control ${action}`}
+            aria-label={label}
+            title={native ? label : "仅桌面版可操作"}
+            disabled={!native}
+            onClick={() => void control(action)}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d={path}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+              />
+            </svg>
+          </button>
+        ))}
+      </div>
       {error && (
         <span className="window-error" role="status">
           {error}

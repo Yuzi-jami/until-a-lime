@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 1420 --strictPort",
     "tauri": "tauri",
-    "test": "vitest run && node --experimental-strip-types --test scripts/generator.test.mjs scripts/entry-actions.test.mjs scripts/preferences.test.mjs scripts/quickfill-model.test.mjs scripts/browser-fill.test.mjs",
+    "test": "vitest run && node --experimental-strip-types --test scripts/generator.test.mjs scripts/entry-actions.test.mjs scripts/preferences.test.mjs scripts/quickfill-model.test.mjs scripts/browser-fill.test.mjs scripts/browser-suggestions.test.mjs",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" vitest.config.ts",
     "browser:prepare": "node scripts/prepare-browser.mjs"
   },

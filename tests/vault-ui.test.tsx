@@ -228,6 +228,9 @@ test("on-demand mode opens without auth, verifies once for a session, and clears
     ).toBe(false),
   );
   expect(screen.queryByLabelText("主密码")).toBeNull();
+  expect(screen.queryByRole("button", { name: "密码生成器" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "设置" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "浏览器扩展" })).toBeNull();
   expect(
     ipc.invoke.mock.calls.some(
       (c) => c[0] === "vault_auth" || c[0] === "vault_list",
@@ -248,4 +251,30 @@ test("on-demand mode opens without auth, verifies once for a session, and clears
   expect(screen.queryByLabelText("主密码")).toBeNull();
   await user.click(screen.getByRole("button", { name: /打开密码收藏室/ }));
   expect(screen.getByLabelText("主密码")).toBeTruthy();
+});
+
+test("hour and custom idle durations reach Rust and survive reopening settings", async () => {
+  const user = userEvent.setup();
+  const first = render(
+    <App initialEntries={[entry]} persistent onVaultLock={vi.fn()} />,
+  );
+  await user.click(screen.getByRole("button", { name: "设置" }));
+  await user.selectOptions(screen.getByLabelText("闲置后锁定"), "120");
+  await waitFor(() =>
+    expect(ipc.invoke).toHaveBeenCalledWith("vault_touch", { minutes: 120 }),
+  );
+  await user.selectOptions(screen.getByLabelText("闲置后锁定"), "custom");
+  await user.clear(screen.getByLabelText("自定义分钟数"));
+  await user.type(screen.getByLabelText("自定义分钟数"), "90");
+  await user.click(screen.getByRole("button", { name: "应用时长" }));
+  await waitFor(() =>
+    expect(ipc.invoke).toHaveBeenCalledWith("vault_touch", { minutes: 90 }),
+  );
+  expect(localStorage.getItem("lime.autoLock")).toBe("90");
+  first.unmount();
+  render(<App initialEntries={[entry]} persistent onVaultLock={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "设置" }));
+  expect(
+    (screen.getByLabelText("自定义分钟数") as HTMLInputElement).value,
+  ).toBe("90");
 });

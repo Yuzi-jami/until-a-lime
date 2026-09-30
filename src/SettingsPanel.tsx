@@ -3,6 +3,10 @@ import AccessSettings from "./AccessSettings";
 import BrowserSetup from "./BrowserSetup";
 import DataSettings from "./DataSettings";
 import type { Entry } from "./model";
+import { useState } from "react";
+import { MAX_AUTO_LOCK_MINUTES } from "./preferences";
+
+const lockOptions = [1, 5, 15, 30, 60, 120, 240, 480, 0];
 
 export default function SettingsPanel({
   theme,
@@ -19,6 +23,9 @@ export default function SettingsPanel({
   persistent?: boolean;
   onImported?: (entries: Entry[]) => void;
 }) {
+  const [custom, setCustom] = useState(!lockOptions.includes(minutes));
+  const [draft, setDraft] = useState(String(minutes || 60));
+  const [lockError, setLockError] = useState("");
   return (
     <section className="settings-panel">
       <div className="eyebrow">MAKE IT YOURS / 一点偏爱</div>
@@ -56,17 +63,66 @@ export default function SettingsPanel({
         闲置后锁定
         <select
           id="auto-lock"
-          value={minutes}
-          onChange={(event) =>
-            onMinutes(Number(event.target.value) as AutoLockMinutes)
-          }
+          value={custom ? "custom" : minutes}
+          onChange={(event) => {
+            setLockError("");
+            setCustom(event.target.value === "custom");
+            if (event.target.value !== "custom")
+              onMinutes(Number(event.target.value));
+            else setDraft(String(minutes || 60));
+          }}
         >
           <option value={1}>1 分钟</option>
           <option value={5}>5 分钟</option>
           <option value={15}>15 分钟</option>
+          <option value={30}>30 分钟</option>
+          <option value={60}>1 小时</option>
+          <option value={120}>2 小时</option>
+          <option value={240}>4 小时</option>
+          <option value={480}>8 小时</option>
+          <option value="custom">自定义…</option>
           <option value={0}>不自动锁定</option>
         </select>
       </label>
+      {custom && (
+        <form
+          className="settings-custom-lock"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = Number(draft);
+            if (
+              !/^\d+$/.test(draft) ||
+              !Number.isInteger(value) ||
+              value < 1 ||
+              value > MAX_AUTO_LOCK_MINUTES
+            ) {
+              setLockError("请输入 1–1440 的整数分钟数。");
+              return;
+            }
+            onMinutes(value);
+            setLockError("");
+          }}
+        >
+          <label>
+            自定义分钟数
+            <input
+              type="number"
+              min={1}
+              max={MAX_AUTO_LOCK_MINUTES}
+              step={1}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+          </label>
+          <button className="secondary" type="submit">
+            应用时长
+          </button>
+          <small>
+            当前：{minutes ? `${minutes} 分钟` : "不自动锁定"}；最多 24 小时。
+          </small>
+          {lockError && <p role="alert">{lockError}</p>}
+        </form>
+      )}
       <p>
         以主窗口内的鼠标和键盘操作计算闲置时间。锁定会收起密码与面板；
         {persistent

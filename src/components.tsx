@@ -92,14 +92,18 @@ export function Wheel({
   onOpenChange,
   dismissOnWindowBlur = false,
   onDrag,
+  menuSuppressed = false,
 }: {
   onAction: (action: WheelAction) => void;
   onOpenChange?: (open: boolean) => void;
   dismissOnWindowBlur?: boolean;
   onDrag?: () => Promise<void>;
+  menuSuppressed?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [pinned, setPinned] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const menuVisible = open && !dragActive && !menuSuppressed;
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const center = useRef<HTMLButtonElement>(null);
   const petals = useRef<(HTMLButtonElement | null)[]>([]);
@@ -110,6 +114,9 @@ export function Wheel({
   );
   const dragging = useRef(false);
   const suppressClick = useRef(false);
+  const hoverNeedsExit = useRef(false);
+  const interactionBlocked = useRef(menuSuppressed);
+  interactionBlocked.current = menuSuppressed;
   const clear = () => clearTimeout(timer.current);
   useEffect(() => () => clearTimeout(timer.current), []);
   useEffect(() => {
@@ -125,8 +132,24 @@ export function Wheel({
       setOpen(false);
     };
     window.addEventListener("blur", close);
-    return () => window.removeEventListener("blur", close);
-  }, [dismissOnWindowBlur]);
+    // A docked fruit moves inward when expanded. Moving off the fruit is not
+    // leaving the native window; keep it open until the window is actually left.
+    const leave = () => {
+      if (!dragging.current && !interactionBlocked.current)
+        hoverNeedsExit.current = false;
+      if (pinned) return;
+      clearTimeout(timer.current);
+      timer.current = setTimeout(close, 450);
+    };
+    const enter = () => clearTimeout(timer.current);
+    document.documentElement.addEventListener("mouseleave", leave);
+    document.documentElement.addEventListener("mouseenter", enter);
+    return () => {
+      window.removeEventListener("blur", close);
+      document.documentElement.removeEventListener("mouseleave", leave);
+      document.documentElement.removeEventListener("mouseenter", enter);
+    };
+  }, [dismissOnWindowBlur, pinned]);
   const actions: {
     id: WheelAction;
     position: string;
@@ -140,11 +163,11 @@ export function Wheel({
   ];
   return (
     <section
-      className={`wheel ${open ? "open" : ""}`}
+      className={`wheel ${menuVisible ? "open" : ""}`}
       aria-label="悬浮轮盘"
       onPointerEnter={clear}
       onPointerLeave={() => {
-        if (!pinned && !dragging.current)
+        if (!dismissOnWindowBlur && !pinned && !dragging.current)
           timer.current = setTimeout(() => setOpen(false), 350);
       }}
       onBlur={(e) => {
@@ -156,6 +179,7 @@ export function Wheel({
           setOpen(false);
       }}
       onKeyDown={(e) => {
+        if (interactionBlocked.current || dragging.current) return;
         const direction = {
           ArrowUp: 0,
           ArrowRight: 1,
@@ -178,7 +202,12 @@ export function Wheel({
         }
       }}
     >
-      <div className="wheel-ring" id={ringId} aria-hidden={!open}>
+      <div
+        className="wheel-ring"
+        id={ringId}
+        hidden={dragActive}
+        aria-hidden={!menuVisible}
+      >
         <span className="wheel-orbit" />
         {actions.map((a, index) => (
           <button
@@ -187,7 +216,7 @@ export function Wheel({
             }}
             key={a.id}
             className={`petal p-${a.position}`}
-            tabIndex={open ? 0 : -1}
+            tabIndex={menuVisible ? 0 : -1}
             onClick={() => {
               clear();
               setOpen(false);
@@ -205,22 +234,37 @@ export function Wheel({
         className="wheel-center"
         title={onDrag ? "悬停展开 · 单击固定 · 按住橙子拖动" : undefined}
         aria-label="展开快捷轮盘"
-        aria-expanded={open}
+        aria-expanded={menuVisible}
         aria-controls={ringId}
         aria-describedby={hintId}
         onFocus={() => {
-          if (!dragging.current) setOpen(true);
+          if (
+            !dragging.current &&
+            !interactionBlocked.current &&
+            !hoverNeedsExit.current
+          )
+            setOpen(true);
         }}
         onPointerEnter={(e) => {
-          if (e.pointerType !== "touch" && !dragging.current) {
+          if (
+            e.pointerType !== "touch" &&
+            !dragging.current &&
+            !interactionBlocked.current &&
+            !hoverNeedsExit.current
+          ) {
             clear();
             setOpen(true);
           }
+        }}
+        onPointerLeave={() => {
+          if (!dragging.current && !interactionBlocked.current)
+            hoverNeedsExit.current = false;
         }}
         onPointerDown={(e) => {
           if (!onDrag || e.button !== 0) return;
           clear();
           suppressClick.current = false;
+          if (!interactionBlocked.current) hoverNeedsExit.current = false;
           gesture.current = { x: e.screenX, y: e.screenY, dragged: false };
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
@@ -230,12 +274,17 @@ export function Wheel({
           if (Math.hypot(e.screenX - start.x, e.screenY - start.y) < 6) return;
           start.dragged = true;
           dragging.current = true;
+          hoverNeedsExit.current = true;
+          // Hide the menu without changing the native window's fruit anchor.
+          setDragActive(true);
           suppressClick.current = true;
           clear();
           if (e.currentTarget.hasPointerCapture(e.pointerId))
             e.currentTarget.releasePointerCapture(e.pointerId);
           void onDrag().finally(() => {
             dragging.current = false;
+            hoverNeedsExit.current = true;
+            setDragActive(false);
             gesture.current = null;
             setPinned(false);
             setOpen(false);
@@ -248,6 +297,7 @@ export function Wheel({
           gesture.current = null;
         }}
         onClick={(e) => {
+          if (interactionBlocked.current || dragging.current) return;
           if (suppressClick.current && e.detail !== 0) {
             suppressClick.current = false;
             return;

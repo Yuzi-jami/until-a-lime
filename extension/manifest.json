@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "酸橙 · 本地密码填写",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "从本机酸橙收藏室选择当前网站的账号并填写。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2HpeMYNCwLgeXwwPulH2S1qs/UDpFmtuJK91s+SiPqiaiOyLbNGQsrMOtczy0fkIAVKYvldVyDag7bCPzy8UQHBXXcUbnRQDW1/l+D/QHTnLqQZCxT3f3OCa3D7sNjlaj1Do35CiZ16IkAGY4q2nECX17eUj7CoSqKCq+KZS8uVs9a1A3ikio9soASAthhXMTOBWZGperEix+bRWSreIGmcXoYVBOQ2H6ebrPq9nTslK40toMXCIifnqsQGsWMM536hsYLfgkXGoONgQKnRcydidmUuLiIBpzuHmMSchbXmezQ9ggKLLiNqPe8GefJHBd8axrU5f0Q/zEb25ec9zqwIDAQAB",
   "permissions": [
@@ -9,6 +9,9 @@
     "scripting",
     "nativeMessaging"
   ],
+  "host_permissions": ["https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [{ "matches": ["https://*/*"], "js": ["suggestions.js"], "all_frames": true, "run_at": "document_idle" }],
   "action": {
     "default_popup": "popup.html",
     "default_title": "酸橙密码"

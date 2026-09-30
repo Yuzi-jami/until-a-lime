@@ -1,15 +1,18 @@
-// Serialized by chrome.scripting into the extension's isolated top-frame world.
+// Serialized by chrome.scripting into an explicitly selected document's isolated world.
 // No page messaging, background listeners, storage, clipboard or submission.
 export function fillPage(mode, expectedOrigin, ticket, credential) {
-  if (window.top !== window || location.protocol !== "https:" || location.origin !== expectedOrigin || document.visibilityState !== "visible") return { error: "页面已变化或不可见，请重新选择。" };
+  if (mode === 'probe') { mode = 'prepare'; expectedOrigin = location.origin; }
+  if (location.protocol !== "https:" || location.origin !== expectedOrigin || document.visibilityState !== "visible") return { error: "页面已变化或不可见，请重新选择。" };
   const visible = el => el instanceof HTMLInputElement && !el.disabled && !el.readOnly && el.type !== "hidden" && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden" && getComputedStyle(el).display !== "none";
   const discover = () => {
     const passwords = [...document.querySelectorAll('input[type="password"]')].filter(el => visible(el) && el.autocomplete !== 'new-password');
     if (passwords.length !== 1) return null;
     const password = passwords[0], scope = password.form || document;
-    const candidates = [...scope.querySelectorAll('input')].filter(el => visible(el) && ['text', 'email', 'tel'].includes(el.type));
+    const candidates = [...scope.querySelectorAll('input')].filter(el => visible(el) && ['text', 'email', 'tel'].includes(el.type)
+      && !/captcha|verify|verification|验证码|搜索|search/i.test(`${el.name} ${el.id} ${el.placeholder} ${el.autocomplete}`));
     const named = candidates.filter(el => ['username','email'].includes(el.autocomplete));
-    const users = named.length ? named : candidates;
+    const hinted = candidates.filter(el => /username|userid|loginname|loginid|account|email|phone|mobile|手机号|用户名|账号|超星号/i.test(`${el.name} ${el.id} ${el.placeholder}`));
+    const users = named.length ? named : hinted.length ? hinted : candidates;
     if (users.length !== 1) return null;
     if (password.form) {
       const target = new URL(password.form.action || location.href, location.href);
@@ -22,7 +25,7 @@ export function fillPage(mode, expectedOrigin, ticket, credential) {
     if (!fields) return { error: "未找到唯一登录表单。请先在网站点击“登录 / Sign in”，打开登录框后再试。" };
     const nonce = crypto.randomUUID();
     globalThis.__limeFillPlan = { ...fields, nonce, deadline: Date.now() + 10000, url: location.href };
-    return { ticket: nonce };
+    return { ticket: nonce, origin: location.origin, focused: fields.user === document.activeElement || fields.password === document.activeElement };
   }
   const plan = globalThis.__limeFillPlan;
   delete globalThis.__limeFillPlan;

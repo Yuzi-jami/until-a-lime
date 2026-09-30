@@ -1,4 +1,50 @@
 /* Collection workspace. Floating controls retain the original fruit artwork. */
+.windows-controls {
+  margin-left: auto;
+  height: 100%;
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.16s;
+}
+.window-bar:has(.windows-controls) {
+  padding-right: 0;
+}
+.windows-controls:hover,
+.windows-controls:focus-within {
+  opacity: 1;
+}
+.windows-control {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 100%;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.windows-control svg {
+  width: 16px;
+  height: 16px;
+}
+.windows-control:hover {
+  background: var(--soft);
+  filter: none;
+}
+.windows-control.close:hover {
+  background: #c9473d;
+  color: white;
+}
+.windows-control:focus-visible {
+  outline-offset: -4px;
+}
+@media (hover: none) {
+  .windows-controls {
+    opacity: 1;
+  }
+}
 .window-bar {
   height: 48px;
   display: flex;
@@ -790,3 +836,8 @@
     padding: 22px 18px;
   }
 }
+/* Custom idle duration stays compact beside the existing preferences. */
+.settings-custom-lock { display:flex; align-items:end; gap:12px; flex-wrap:wrap; margin:14px 0; }
+.settings-custom-lock label { display:grid; gap:6px; font-size:13px; }
+.settings-custom-lock input { width:140px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); }
+.settings-custom-lock small { color:var(--muted); padding-bottom:10px; }

@@ -26,6 +26,7 @@ pub struct BrowserEntry {
     pub id: u32,
     pub name: String,
     pub user: String,
+    pub site: String,
 }
 #[derive(serde::Serialize)]
 pub struct Credential {
@@ -65,7 +66,54 @@ pub fn matches_site(saved: &str, requested: &str) -> bool {
     } else {
         format!("https://{saved}")
     };
-    origin(&saved).is_ok_and(|value| value == requested)
+    let (Ok(saved), Ok(requested)) = (url::Url::parse(&saved), url::Url::parse(requested)) else {
+        return false;
+    };
+    if !matches!(saved.scheme(), "http" | "https")
+        || requested.scheme() != "https"
+        || !saved.username().is_empty()
+        || saved.password().is_some()
+        || !requested.username().is_empty()
+        || requested.password().is_some()
+        || saved.port() != requested.port()
+    {
+        return false;
+    }
+    let (Some(saved_host), Some(requested_host)) = (saved.host_str(), requested.host_str()) else {
+        return false;
+    };
+    if saved_host == requested_host {
+        return true;
+    }
+    // Public/private suffix rules prevent matching independent co.uk/github.io
+    // tenants. Never use a naive last-two-label or string suffix comparison.
+    if saved.port().is_some()
+        || saved
+            .host()
+            .is_some_and(|h| !matches!(h, url::Host::Domain(_)))
+        || requested
+            .host()
+            .is_some_and(|h| !matches!(h, url::Host::Domain(_)))
+    {
+        return false;
+    }
+    match (
+        psl::domain(saved_host.as_bytes()),
+        psl::domain(requested_host.as_bytes()),
+    ) {
+        (Some(a), Some(b)) => a.as_bytes() == b.as_bytes(),
+        _ => false,
+    }
+}
+pub fn site_label(saved: &str) -> String {
+    let value = if saved.contains("://") {
+        saved.to_owned()
+    } else {
+        format!("https://{saved}")
+    };
+    url::Url::parse(&value)
+        .map(|url| url.origin().ascii_serialization())
+        .unwrap_or_default()
 }
 impl BrowserBridge {
     pub fn start(directory: PathBuf, service: VaultService) -> Result<Self, String> {
@@ -84,6 +132,9 @@ impl BrowserBridge {
             directory,
         };
         if bridge.enabled.load(Ordering::Relaxed) {
+            // Existing opt-in survives restarts; refresh bundled extension files
+            // and the host path without requiring the setup button every time.
+            prepare_extension(&bridge)?;
             bridge.write_connection()?;
         }
         let worker = bridge.clone();
@@ -144,6 +195,18 @@ pub fn browser_install(window: tauri::WebviewWindow) -> Result<String, String> {
     let bridge = state
         .as_ref()
         .ok_or("浏览器连接暂不可用，请重新启动应用；密码库仍可正常使用。")?;
+    let folder = prepare_extension(bridge)?;
+    bridge.write_connection()?;
+    std::fs::write(bridge.directory.join("browser-enabled"), b"enabled")
+        .map_err(|_| "无法保存连接偏好。")?;
+    bridge.enabled.store(true, Ordering::Relaxed);
+    Ok(format!(
+        "已准备本机连接。首次在浏览器加载此扩展文件夹，以后会自动连接：{}",
+        folder.display()
+    ))
+}
+
+fn prepare_extension(bridge: &BrowserBridge) -> Result<PathBuf, String> {
     let executable = std::env::current_exe().map_err(|_| "无法定位程序。")?;
     let host = executable
         .parent()
@@ -176,11 +239,21 @@ pub fn browser_install(window: tauri::WebviewWindow) -> Result<String, String> {
             include_bytes!("../../extension/fill.js").as_slice(),
         ),
         (
+            "background.js",
+            include_bytes!("../../extension/background.js").as_slice(),
+        ),
+        (
+            "suggestions.js",
+            include_bytes!("../../extension/suggestions.js").as_slice(),
+        ),
+        (
             "icon.png",
             include_bytes!("../../extension/icon.png").as_slice(),
         ),
     ] {
-        std::fs::write(folder.join(name), bytes).map_err(|_| "无法准备扩展文件。")?;
+        if std::fs::read(folder.join(name)).ok().as_deref() != Some(bytes) {
+            std::fs::write(folder.join(name), bytes).map_err(|_| "无法准备扩展文件。")?;
+        }
     }
     let manifest = bridge.directory.join("browser-host.json");
     let json = serde_json::json!({ "name": HOST, "description": "Lime local vault bridge", "path": host, "type": "stdio", "allowed_origins": [format!("chrome-extension://{EXTENSION_ID}/")] });
@@ -210,14 +283,7 @@ pub fn browser_install(window: tauri::WebviewWindow) -> Result<String, String> {
             return Err("注册失败，请检查当前用户权限。".into());
         }
     }
-    bridge.write_connection()?;
-    std::fs::write(bridge.directory.join("browser-enabled"), b"enabled")
-        .map_err(|_| "无法保存连接偏好。")?;
-    bridge.enabled.store(true, Ordering::Relaxed);
-    Ok(format!(
-        "已准备本机连接。请在浏览器加载此扩展文件夹：{}",
-        folder.display()
-    ))
+    Ok(folder)
 }
 
 #[tauri::command]
@@ -282,21 +348,39 @@ mod tests {
         assert_eq!(send(&bridge.token, &origin)["error"], "浏览器连接未授权。");
     }
     #[test]
-    fn matching_requires_exact_https_origin() {
+    fn matching_allows_secure_same_site_but_not_unrelated_or_private_suffix_tenants() {
         assert!(matches_site(
             "example.invalid/login",
             "https://example.invalid"
         ));
         for saved in [
-            "http://example.invalid",
             "https://example.invalid.evil.invalid",
-            "https://sub.example.invalid",
             "https://example.invalid:444",
             "https://user@example.invalid",
             "javascript:alert(1)",
         ] {
             assert!(!matches_site(saved, "https://example.invalid"));
         }
+        assert!(matches_site(
+            "http://example.invalid/login",
+            "https://example.invalid"
+        ));
+        assert!(matches_site(
+            "https://passport2.chaoxing.com/login",
+            "https://v1.chaoxing.com"
+        ));
+        assert!(!matches_site(
+            "https://passport2.chaoxing.com/login",
+            "https://chaoxing.com.evil.com"
+        ));
+        assert!(!matches_site("https://a.github.io", "https://b.github.io"));
+        assert!(!matches_site("https://a.co.uk", "https://b.co.uk"));
+        assert!(!matches_site("https://a.com.cn", "https://b.com.cn"));
+        assert!(!matches_site("https://example.com", "http://example.com"));
+        assert!(!matches_site(
+            "https://sub.example.com:8443",
+            "https://other.example.com:8443"
+        ));
         assert!(origin("http://example.invalid").is_err());
         assert_eq!(
             origin("https://EXAMPLE.invalid:443/login").unwrap(),

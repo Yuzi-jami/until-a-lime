@@ -50,3 +50,11 @@ test('username handler replacing password cancels before disclosing password',()
  const p=fill('prepare',origin);assert.ok(fill('fill',origin,p.ticket,credential).error);
  assert.equal(doc.querySelector('[type=password]').value,'');dom.window.close();
 });
+test('phone login with captcha and search inputs selects the login account field',()=>{
+ const {dom,fill,doc}=page('<input type="search" placeholder="搜索"><form><input id="phone" placeholder="手机号/超星号"><input type="password" placeholder="学习通密码"><input name="captcha" placeholder="验证码"><button>登录</button></form>','https://v1.chaoxing.com/backSchool/toLogin');
+ const site='https://v1.chaoxing.com';
+ const plan=fill('prepare',site); assert.ok(plan.ticket);
+ assert.ok(fill('fill',site,plan.ticket,credential).filled);
+ assert.equal(doc.querySelector('#phone').value,credential.user);
+ assert.equal(doc.querySelector('[name=captcha]').value,''); dom.window.close();
+});

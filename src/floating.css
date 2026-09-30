@@ -1,0 +1,138 @@
+/* Native window dimensions and fruit anchors match floating_layout.rs. */
+.floating-surface {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+.floating-surface .wheel-hint {
+  display: none;
+}
+.floating-surface[data-layout="compact"] .wheel {
+  left: -82px;
+  top: -90px;
+}
+.floating-surface[data-layout="compact"][data-edge="left"] .wheel {
+  left: -130px;
+}
+.floating-surface[data-layout="compact"][data-edge="right"] .wheel {
+  left: -82px;
+}
+.floating-surface[data-layout="compact"][data-edge="top"] .wheel {
+  top: -130px;
+}
+.floating-surface[data-layout="compact"][data-edge="bottom"] .wheel {
+  top: -86px;
+}
+.floating-surface[data-layout="notice"] .wheel {
+  left: 20px;
+  top: -90px;
+}
+.floating-surface[data-layout="wheel"] .wheel {
+  left: 20px;
+  top: 8px;
+}
+.floating-surface[data-layout="compact"] .wheel-ring,
+.floating-surface[data-layout="notice"] .wheel-ring {
+  visibility: hidden;
+  pointer-events: none;
+}
+.floating-surface[data-motion="sliding"][data-layout] .wheel {
+  left: var(--motion-x);
+  top: var(--motion-y);
+  will-change: translate;
+}
+.floating-surface[data-moving="true"] .wheel-ring {
+  visibility: hidden;
+  pointer-events: none;
+}
+.floating-surface .wheel .wheel-ring {
+  opacity: 0;
+  transition: opacity 90ms ease-out, visibility 0s 90ms;
+}
+.floating-surface .wheel.open .wheel-ring {
+  opacity: 1;
+  transition: opacity 130ms ease-out, visibility 0s;
+  animation: floating-menu-in 130ms ease-out both;
+}
+@keyframes floating-menu-in {
+  from { opacity: 0; scale: .96; }
+  to { opacity: 1; scale: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-surface .wheel .wheel-ring { animation: none; transition: none; }
+}
+.floating-surface .float-status,
+.floating-surface .float-error,
+.floating-surface .floating-armed {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 88px;
+  bottom: auto;
+  width: auto;
+  min-height: 0;
+  max-height: 110px;
+  overflow: auto;
+  margin: 0;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 4px 12px #0002;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  z-index: 10;
+  pointer-events: auto;
+}
+.floating-surface .float-status {
+  text-align: center;
+  pointer-events: none;
+}
+.floating-surface .floating-armed {
+  top: 82px;
+  max-height: 120px;
+  font-size: 11px;
+}
+.floating-surface .floating-armed span {
+  margin: 5px 0;
+}
+.floating-surface .floating-armed button {
+  float: right;
+  padding: 4px 10px;
+}
+.floating-surface .armed-fruit {
+  position: absolute;
+  width: 62px;
+  height: 62px;
+  left: 119px;
+  top: 9px;
+}
+.floating-surface .armed-fruit img {
+  width: 100%;
+  height: 100%;
+}
+.floating-surface .floating-search {
+  inset: 12px;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 16px;
+}
+.floating-surface .floating-results {
+  max-height: 236px;
+}
+.floating-surface[data-layout="panel"] .float-error {
+  top: auto;
+  bottom: 14px;
+  max-height: 100px;
+}
+.floating-surface[data-layout="panel"]:has(.float-error) .floating-results {
+  max-height: 140px;
+}
+.floating-surface[data-layout="notice"]:has(.floating-armed) .float-error {
+  top: 82px;
+  pointer-events: none;
+}

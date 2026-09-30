@@ -2,7 +2,8 @@
   "identifier": "main-preview",
   "description": "Main demo window may listen for local navigation events; no filesystem, shell, clipboard or input permissions",
   "windows": [
-    "main"
+    "main",
+    "floating"
   ],
   "permissions": [
     "core:event:allow-listen",

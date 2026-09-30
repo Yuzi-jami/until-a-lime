@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Entry } from "./model";
 
-type Preview = { ticket: string; name: string; added: number; skipped: number };
+type Preview = {
+  ticket: string;
+  name: string;
+  added: number;
+  skipped: number;
+  without_username?: number;
+};
 export default function CsvImportPanel({
   onImported,
 }: {
@@ -75,6 +81,11 @@ export default function CsvImportPanel({
         在浏览器密码管理器中导出密码，选择导出的
         CSV。先检查条数，再追加到收藏室；相同网址、用户名和密码会跳过，不覆盖已有记录。
       </p>
+      <p>
+        支持 name、url、username、password、note/notes
+        列，列顺序不限。用户名和备注可留空；中文、长网址和多行备注会保留。直接选择原始
+        CSV 即可，无需用 Excel 打开或转换。
+      </p>
       <p>CSV 内含明文密码。导入成功后请自行安全保管或删除导出文件。</p>
       <button
         disabled={busy}
@@ -90,6 +101,12 @@ export default function CsvImportPanel({
             将新增 <strong>{preview.added}</strong> 条，跳过{" "}
             <strong>{preview.skipped}</strong> 条重复记录。
           </p>
+          {!!preview.without_username && (
+            <p>
+              文件中有 {preview.without_username}{" "}
+              条记录未提供用户名，会按原样保留。
+            </p>
+          )}
           <button
             className="primary"
             disabled={busy}

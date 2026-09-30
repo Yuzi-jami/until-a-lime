@@ -25,6 +25,7 @@ tempfile = "3"
 rfd = "0.15"
 csv = "1.4"
 url = "2"
+psl = "2.1.238"
 
 [target."cfg(windows)".dependencies]
 clipboard-win = "5"

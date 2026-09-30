@@ -1,10 +1,17 @@
 export type ThemePreference = "light" | "dark" | "system";
-export type AutoLockMinutes = 0 | 1 | 5 | 15;
+export type AutoLockMinutes = number;
+export const MAX_AUTO_LOCK_MINUTES = 1440;
 export function parseTheme(value: string | null): ThemePreference {
   return value === "light" || value === "dark" ? value : "system";
 }
 export function parseAutoLock(value: string | null): AutoLockMinutes {
-  return value === "0" ? 0 : value === "1" ? 1 : value === "15" ? 15 : 5;
+  if (value === null || !/^\d+$/.test(value)) return 5;
+  const minutes = Number(value);
+  return Number.isInteger(minutes) &&
+    minutes >= 0 &&
+    minutes <= MAX_AUTO_LOCK_MINUTES
+    ? minutes
+    : 5;
 }
 export function isDark(theme: ThemePreference, systemDark: boolean): boolean {
   return theme === "dark" || (theme === "system" && systemDark);
