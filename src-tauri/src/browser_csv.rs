@@ -95,7 +95,7 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<CsvEntry>, String> {
             name: title.into(),
             user: row.get(user).unwrap_or("").into(),
             url: address.into(),
-            category: "生活".into(),
+            category: "未分类".into(),
             icon: "◇".into(),
             note: note.and_then(|i| row.get(i)).unwrap_or("").into(),
             favorite: false,

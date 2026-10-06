@@ -12,6 +12,15 @@ import {
   type DeletedEntry,
 } from "./entry-actions";
 import Generator from "./GeneratorPanel";
+import QuickSave from "./QuickSave";
+import CategoryOrganizer from "./CategoryOrganizer";
+import QuickGroup from "./QuickGroup";
+import UsageGuide from "./UsageGuide";
+import {
+  categoryOptions,
+  defaultCategories,
+  type CategoryChange,
+} from "./categories";
 import {
   useCallback,
   useEffect,
@@ -37,7 +46,7 @@ import {
   type Filter,
 } from "./model";
 type DialogState =
-  | { kind: "search" | "generate" | "help" | "settings" }
+  | { kind: "search" | "generate" | "save" | "organize" | "help" | "settings" }
   | { kind: "edit"; entry?: Entry }
   | { kind: "delete"; entry: Entry }
   | null;
@@ -203,7 +212,8 @@ export default function App({
         (filter === "all" ||
           (filter === "favorite" && e.favorite) ||
           (filter === "recent" && recent.includes(e.id)) ||
-          e.category === filter) &&
+          e.category === filter ||
+          filter === `category:${e.category}`) &&
         `${e.name} ${e.user} ${e.url}`
           .toLowerCase()
           .includes(query.toLowerCase()),
@@ -252,7 +262,8 @@ export default function App({
   }, [entries, persistent, locked]);
   const title =
     page === "vault"
-      ? navigation.find((n) => n.id === filter)!.label
+      ? (navigation.find((n) => n.id === filter)?.label ??
+        (filter.startsWith("category:") ? filter.slice(9) : filter))
       : (
           {
             browser: "浏览器插件",
@@ -279,7 +290,7 @@ export default function App({
     setDeleted(null);
     setLocked(true);
   }, [persistent, onVaultLock]);
-  useIdleLock(minutes, locked, lock);
+  useIdleLock(minutes, locked || persistent, lock);
   useEffect(() => {
     if (!persistent || locked) return;
     let last = 0;
@@ -316,6 +327,16 @@ export default function App({
       mutation.current = false;
       if (alive.current) setSaving(false);
     }
+  };
+  const regroup = async (changes: CategoryChange[], remember: boolean) => {
+    if (persistent) return mutate("vault_regroup", { changes, remember });
+    setEntries((previous) =>
+      previous.map((entry) => {
+        const change = changes.find((item) => item.id === entry.id);
+        return change ? { ...entry, category: change.category } : entry;
+      }),
+    );
+    return true;
   };
   const reveal = async () => {
     if (shown) {
@@ -558,7 +579,7 @@ export default function App({
               {title}
             </div>
             <span className="demo-label">
-              开发预览 · {persistent ? "本地加密" : "虚构数据"}
+              1.0 · {persistent ? "本地加密" : "虚构数据预览"}
             </span>
             <button
               className="icon-button"
@@ -647,17 +668,30 @@ export default function App({
                     </select>
                   </div>
                   <div className="category-tabs" aria-label="账号分类">
-                    {["all", "工作", "生活", "娱乐", "recent"].map((id) => (
+                    {[
+                      { id: "all", label: "全部" },
+                      ...categoryOptions(entries).map((category) => ({
+                        id: `category:${category}`,
+                        label: category,
+                      })),
+                      { id: "recent", label: "最近" },
+                    ].map(({ id, label }) => (
                       <button
                         key={id}
                         aria-pressed={filter === id}
                         className={filter === id ? "selected" : ""}
                         onClick={() => setFilter(id as Filter)}
                       >
-                        {id === "all" ? "全部" : id === "recent" ? "最近" : id}
+                        {label}
                       </button>
                     ))}
                   </div>
+                  <button
+                    className="organize-entry"
+                    onClick={() => setDialog({ kind: "organize" })}
+                  >
+                    整理分类 · 建议与批量修改 ↗
+                  </button>
                   <div className="list-header">
                     <span>账号 / ACCOUNT</span>
                     <span>分类</span>
@@ -712,6 +746,26 @@ export default function App({
                           {current.favorite ? "★" : "☆"}
                         </button>
                       </div>
+                      <QuickGroup
+                        key={`${current.id}:${current.category}`}
+                        entry={current}
+                        options={categoryOptions(entries)}
+                        busy={saving}
+                        onApply={async (category, remember) => {
+                          const ok = await regroup(
+                            [
+                              {
+                                id: current.id,
+                                from: current.category,
+                                category,
+                              },
+                            ],
+                            remember,
+                          );
+                          if (ok) setToast("分组已更新");
+                          return ok;
+                        }}
+                      />
                       <div className="credential-overview">
                         <div className="credential-fields">
                           <div className="field-label">用户名</div>
@@ -814,19 +868,23 @@ export default function App({
       {dialog && (
         <Modal
           title={
-            dialog.kind === "search"
-              ? "寻找一颗酸橙"
-              : dialog.kind === "edit"
-                ? persistent
-                  ? "编辑账号"
-                  : "编辑演示账号"
-                : dialog.kind === "generate"
-                  ? "密码生成器"
-                  : dialog.kind === "delete"
-                    ? "删除账号"
-                    : dialog.kind === "settings"
-                      ? "收藏室设置"
-                      : "应用说明"
+            dialog.kind === "organize"
+              ? "整理分类"
+              : dialog.kind === "save"
+                ? "保存账号"
+                : dialog.kind === "search"
+                  ? "寻找一颗酸橙"
+                  : dialog.kind === "edit"
+                    ? persistent
+                      ? "编辑账号"
+                      : "编辑演示账号"
+                    : dialog.kind === "generate"
+                      ? "密码生成器"
+                      : dialog.kind === "delete"
+                        ? "删除账号"
+                        : dialog.kind === "settings"
+                          ? "收藏室设置"
+                          : "应用说明"
           }
           onClose={() => {
             if (!saving) {
@@ -835,10 +893,42 @@ export default function App({
             }
           }}
         >
-          {operationError && (
+          {operationError && dialog.kind !== "organize" && (
             <p role="alert" className="operation-error">
               {operationError}
             </p>
+          )}
+          {dialog.kind === "organize" && (
+            <CategoryOrganizer
+              errorMessage={operationError}
+              entries={entries}
+              persistent={persistent}
+              busy={saving}
+              onRegroup={regroup}
+              onApply={(ids, category, remember = false) =>
+                regroup(
+                  entries
+                    .filter((entry) => ids.includes(entry.id))
+                    .map((entry) => ({
+                      id: entry.id,
+                      from: entry.category,
+                      category,
+                    })),
+                  remember,
+                )
+              }
+            />
+          )}
+          {dialog.kind === "save" && (
+            <QuickSave
+              persistent={false}
+              context={{ entries, rules: {}, epoch: 0 }}
+              onClose={() => setDialog(null)}
+              onSaved={(entry) => {
+                if (entry)
+                  void save({ ...entry, id: entry.id || nextId.current });
+              }}
+            />
           )}
           {dialog.kind === "search" && (
             <QuickSearch
@@ -859,6 +949,7 @@ export default function App({
               onSave={save}
               persistent={persistent}
               saving={saving}
+              categories={categoryOptions(entries)}
             />
           )}
           {dialog.kind === "settings" && (
@@ -906,20 +997,7 @@ export default function App({
               </div>
             </>
           )}
-          {dialog.kind === "help" && (
-            <>
-              <div className="eyebrow">UNTIL / A LIME — 0.1</div>
-              <h2>直到密码变成一颗酸橙</h2>
-              <p>
-                React + TypeScript 界面，Tauri 2 桌面容器。当前运行环境：
-                {runtime}。
-              </p>
-              <p>
-                桌面账号加密保存到本机，浏览器预览只保留演示数据。主题偏好和桌面轮盘位置会保存在本机。桌面版支持独立悬浮轮盘和托盘。关闭主窗口只隐藏到托盘并保持解锁；退出请使用托盘菜单；托盘也可重置轮盘位置。生成器支持复制及定时清理；账号密码按需显示和复制。悬浮轮盘支持普通应用的剪贴板连续填写。QQ
-                等受保护输入框不接入。
-              </p>
-            </>
-          )}
+          {dialog.kind === "help" && <UsageGuide />}
         </Modal>
       )}
     </>
@@ -963,12 +1041,14 @@ function EntryForm({
   onSave,
   persistent = false,
   saving = false,
+  categories = defaultCategories,
 }: {
   entry?: Entry;
   nextId: number;
   onSave: (e: Entry, password?: string) => void;
   persistent?: boolean;
   saving?: boolean;
+  categories?: string[];
 }) {
   const [error, setError] = useState("");
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -1026,11 +1106,18 @@ function EntryForm({
           </label>
           <label>
             分类
-            <select name="category" defaultValue={entry?.category ?? "工作"}>
-              {(["工作", "生活", "娱乐"] as Category[]).map((c) => (
-                <option key={c}>{c}</option>
+            <input
+              name="category"
+              list="entry-categories"
+              required
+              maxLength={24}
+              defaultValue={entry?.category ?? "未分类"}
+            />
+            <datalist id="entry-categories">
+              {categories.map((c) => (
+                <option key={c} value={c} />
               ))}
-            </select>
+            </datalist>
           </label>
           {persistent && (
             <label>

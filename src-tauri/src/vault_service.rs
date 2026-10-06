@@ -539,6 +539,115 @@ fn require_main(window: &tauri::WebviewWindow) -> Result<(), String> {
         Err("仅主窗口可访问密码库。".into())
     }
 }
+#[derive(serde::Serialize)]
+pub struct SaveContext {
+    entries: Vec<Metadata>,
+    rules: std::collections::HashMap<String, String>,
+    epoch: u64,
+}
+fn require_editor(window: &tauri::WebviewWindow) -> Result<(), String> {
+    if matches!(window.label(), "main" | "floating") {
+        Ok(())
+    } else {
+        Err("此窗口不能保存账号。".into())
+    }
+}
+#[tauri::command]
+pub fn quick_save_context(window: tauri::WebviewWindow) -> Result<SaveContext, String> {
+    require_editor(&window)?;
+    window.state::<VaultService>().save_context()
+}
+impl VaultService {
+    fn save_context(&self) -> Result<SaveContext, String> {
+        let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
+        if state.busy || VaultService::expired(&state) {
+            return Err("请先解锁收藏室。".into());
+        }
+        let vault = state.vault.as_ref().ok_or("请先解锁收藏室。")?;
+        let result = SaveContext {
+            entries: vault.list(),
+            rules: vault.category_rules(),
+            epoch: state.epoch,
+        };
+        state.last = SystemTime::now();
+        Ok(result)
+    }
+    fn save_account(
+        &self,
+        entry: Metadata,
+        password: &str,
+        epoch: u64,
+        update_id: Option<u32>,
+        separate: bool,
+    ) -> Result<(), String> {
+        let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
+        if state.busy || state.epoch != epoch || Self::expired(&state) {
+            return Err("保存会话已失效，请重新打开面板。".into());
+        }
+        state
+            .vault
+            .as_mut()
+            .ok_or("密码库已锁定。")?
+            .quick_save(entry, password, update_id, separate)?;
+        state.last = SystemTime::now();
+        Ok(())
+    }
+}
+#[tauri::command]
+pub fn quick_save_account(
+    window: tauri::WebviewWindow,
+    entry: Metadata,
+    password: String,
+    epoch: u64,
+    update_id: Option<u32>,
+    separate: bool,
+) -> Result<(), String> {
+    let password = Zeroizing::new(password);
+    require_editor(&window)?;
+    window
+        .state::<VaultService>()
+        .save_account(entry, &password, epoch, update_id, separate)?;
+    let _ = window.app_handle().emit("lime-vault-changed", ());
+    Ok(())
+}
+#[tauri::command]
+pub fn floating_touch(window: tauri::WebviewWindow) -> Result<(), String> {
+    require_editor(&window)?;
+    let service = window.state::<VaultService>();
+    if service.check() {
+        lock_all(window.app_handle());
+        return Err("密码库已锁定。".into());
+    }
+    service.access(|_| Ok(()))
+}
+#[tauri::command]
+pub fn vault_categorize(
+    window: tauri::WebviewWindow,
+    ids: Vec<u32>,
+    category: String,
+) -> Result<Vec<Metadata>, String> {
+    require_main(&window)?;
+    let result = window.state::<VaultService>().access(|vault| {
+        vault.categorize(&ids, &category)?;
+        Ok(vault.list())
+    })?;
+    let _ = window.app_handle().emit("lime-vault-changed", ());
+    Ok(result)
+}
+#[tauri::command]
+pub fn vault_regroup(
+    window: tauri::WebviewWindow,
+    changes: Vec<crate::vault::CategoryChange>,
+    remember: bool,
+) -> Result<Vec<Metadata>, String> {
+    require_main(&window)?;
+    let result = window.state::<VaultService>().access(|vault| {
+        vault.regroup(&changes, remember)?;
+        Ok(vault.list())
+    })?;
+    let _ = window.app_handle().emit("lime-vault-changed", ());
+    Ok(result)
+}
 pub fn lock_all(app: &tauri::AppHandle) {
     app.state::<crate::quick_paste::QuickPaste>().cancel();
     app.state::<VaultService>().lock();
@@ -687,6 +796,79 @@ pub fn vault_copy(window: tauri::WebviewWindow, id: u32, field: String) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn quick_save_rejects_locked_expired_busy_and_previous_sessions() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = VaultService::new(dir.path().join("quick-save.lime"));
+        assert!(service.save_context().is_err());
+        let master = "fictional-master-only";
+        service
+            .authenticate(Zeroizing::new(master.into()), true, false)
+            .unwrap();
+        let rows = crate::browser_csv::parse(
+            b"url,username,password\nhttps://example.invalid,fictional,fictional-old\n",
+        )
+        .unwrap();
+        service.access(|v| v.import_csv(&rows)).unwrap();
+        let context = service.save_context().unwrap();
+        let entry = context.entries[0].clone();
+        service.lock();
+        assert!(service
+            .save_account(
+                entry.clone(),
+                "fictional-new",
+                context.epoch,
+                Some(entry.id),
+                false
+            )
+            .is_err());
+        service
+            .authenticate(Zeroizing::new(master.into()), false, false)
+            .unwrap();
+        assert!(service
+            .save_account(
+                entry.clone(),
+                "fictional-new",
+                context.epoch,
+                Some(entry.id),
+                false
+            )
+            .is_err());
+        let epoch = service.save_context().unwrap().epoch;
+        service.state.lock().unwrap().busy = true;
+        assert!(service
+            .save_account(entry.clone(), "fictional-new", epoch, Some(entry.id), false)
+            .is_err());
+        service.state.lock().unwrap().busy = false;
+        service
+            .save_account(entry.clone(), "fictional-new", epoch, Some(entry.id), false)
+            .unwrap();
+        assert_eq!(
+            service
+                .access(|v| Ok(v.secret(entry.id)?.to_string()))
+                .unwrap(),
+            "fictional-new"
+        );
+        service.state.lock().unwrap().last = SystemTime::now() - Duration::from_secs(301);
+        assert!(service.save_context().is_err());
+        assert!(service
+            .save_account(
+                entry.clone(),
+                "fictional-late",
+                epoch,
+                Some(entry.id),
+                false
+            )
+            .is_err());
+        assert_eq!(
+            Vault::open(service.path.clone(), master)
+                .unwrap()
+                .secret(entry.id)
+                .unwrap()
+                .as_str(),
+            "fictional-new"
+        );
+    }
     #[test]
     fn browser_access_requires_valid_session_and_same_site_and_csv_ticket_dies_on_lock() {
         use crate::browser_protocol::Request;

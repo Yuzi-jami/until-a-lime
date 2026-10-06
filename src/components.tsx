@@ -86,7 +86,7 @@ export function Modal({
     </dialog>
   );
 }
-export type WheelAction = "search" | "generate" | "lock" | "vault";
+export type WheelAction = "search" | "generate" | "save" | "lock" | "vault";
 export function Wheel({
   onAction,
   onOpenChange,
@@ -157,7 +157,7 @@ export function Wheel({
     label: string;
   }[] = [
     { id: "search", position: "top", icon: "⌕", label: "寻找账号" },
-    { id: "generate", position: "right", icon: "✳", label: "生成密码" },
+    { id: "save", position: "right", icon: "＋", label: "保存账号" },
     { id: "lock", position: "bottom", icon: "⌑", label: "锁定" },
     { id: "vault", position: "left", icon: "▦", label: "收藏室" },
   ];

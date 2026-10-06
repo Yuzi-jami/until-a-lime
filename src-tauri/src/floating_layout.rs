@@ -17,6 +17,7 @@ pub enum Layout {
     Compact,
     Wheel,
     Panel,
+    Editor,
     Notice,
 }
 
@@ -85,6 +86,7 @@ struct PendingMotion {
 pub fn geometry(layout: Layout, edge: Option<Edge>) -> (f64, f64, f64, f64) {
     match layout {
         Layout::Wheel | Layout::Panel => (300.0, 360.0, 150.0, 138.0),
+        Layout::Editor => (360.0, 560.0, 180.0, 138.0),
         Layout::Notice => (300.0, 210.0, 150.0, 40.0),
         Layout::Compact => match edge {
             Some(Edge::Left) => (48.0, 88.0, 0.0, 40.0),
@@ -248,6 +250,14 @@ fn target_placement(
 ) -> Placement {
     let (left, top, right, bottom) = bounds;
     let (width, height, ax, ay) = geometry(layout, edge);
+    let (width, height) = if layout == Layout::Editor {
+        (
+            width.min((right - left) / scale),
+            height.min((bottom - top) / scale),
+        )
+    } else {
+        (width, height)
+    };
     let mut x = cx - ax * scale;
     let mut y = cy - ay * scale;
     if let Some(edge) = edge {
@@ -488,5 +498,22 @@ mod tests {
         }
         let (_, h, _, y) = geometry(Layout::Notice, None);
         assert!(y + 31.0 < 88.0 && h >= 200.0);
+    }
+    #[test]
+    fn editor_fits_small_work_areas_at_high_dpi() {
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let bounds = (-1280.0, 0.0, 0.0, 680.0);
+            let target = target_placement(
+                Layout::Editor,
+                Some(Edge::Bottom),
+                -100.0,
+                660.0,
+                scale,
+                bounds,
+            );
+            assert!(target.x >= bounds.0 && target.y >= bounds.1);
+            assert!(target.x + target.width * scale <= bounds.2 + 1.0);
+            assert!(target.y + target.height * scale <= bounds.3 + 1.0);
+        }
     }
 }

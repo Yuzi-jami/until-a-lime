@@ -100,6 +100,38 @@ test("locking clears floating account metadata and closes the search panel", asy
   expect(screen.queryByPlaceholderText("搜索账号")).toBeNull();
 });
 
+test("save uses the floating editor, survives blur, and drops its draft on vault lock", async () => {
+  ipc.invoke.mockImplementation(async (command) => {
+    if (command === "quick_save_context")
+      return { entries: [], rules: {}, epoch: 4 };
+    return null;
+  });
+  const { container } = render(<Floating />);
+  fireEvent.click(screen.getByRole("button", { name: "展开快捷轮盘" }));
+  fireEvent.click(screen.getByRole("button", { name: /保存账号/ }));
+  fireEvent.change(await screen.findByLabelText("网站 / 应用"), {
+    target: { value: "example.invalid" },
+  });
+  fireEvent.change(screen.getByLabelText("密码"), {
+    target: { value: "fictional-draft" },
+  });
+  await waitFor(() =>
+    expect(
+      container.querySelector(".floating-surface")?.getAttribute("data-layout"),
+    ).toBe("editor"),
+  );
+  fireEvent.blur(window);
+  expect((screen.getByLabelText("密码") as HTMLInputElement).value).toBe(
+    "fictional-draft",
+  );
+  expect(
+    ipc.invoke.mock.calls.some(([command]) => command === "desktop_action"),
+  ).toBe(false);
+  act(() => ipc.listeners.get("lime-action")?.({ payload: "lock" }));
+  expect(screen.queryByLabelText("密码")).toBeNull();
+  expect(screen.queryByRole("region", { name: "快速保存账号" })).toBeNull();
+});
+
 test("an imported entry without a username copies only the password without arming Tab", async () => {
   ipc.invoke.mockImplementation(async (command) => {
     if (command === "quick_paste_accounts")

@@ -88,7 +88,11 @@ fn restore_floating_placement(
 
 #[tauri::command]
 fn runtime_status() -> &'static str {
-    "Tauri 2 桌面预览"
+    if cfg!(debug_assertions) {
+        "1.0.0 · Debug"
+    } else {
+        "1.0.0 · 本地密码库"
+    }
 }
 
 fn show_main(app: &tauri::AppHandle) -> Result<WebviewWindow, String> {
@@ -210,6 +214,11 @@ pub fn run() {
             vault_service::vault_list,
             vault_service::vault_strengths,
             vault_service::vault_save,
+            vault_service::quick_save_context,
+            vault_service::quick_save_account,
+            vault_service::floating_touch,
+            vault_service::vault_categorize,
+            vault_service::vault_regroup,
             vault_service::vault_delete,
             vault_service::vault_undo,
             vault_service::vault_reveal,

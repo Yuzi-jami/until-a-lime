@@ -85,7 +85,7 @@ impl ClipboardService {
             status,
         };
         *pending = None;
-        let _ = app.emit_to("main", "lime-clipboard", event);
+        let _ = app.emit("lime-clipboard", event);
     }
 }
 
@@ -110,8 +110,9 @@ fn clear_sequence(_sequence: u32) -> &'static str {
 
 #[tauri::command]
 pub fn copy_generated_password(window: tauri::WebviewWindow, value: String) -> Result<u32, String> {
-    if window.label() != "main" {
-        return Err("只能从主窗口复制。".into());
+    let value = zeroize::Zeroizing::new(value);
+    if !matches!(window.label(), "main" | "floating") {
+        return Err("此窗口不能复制密码。".into());
     }
     if !valid_password(&value) {
         return Err("只能复制 8–64 位可见 ASCII 字符。".into());

@@ -1,4 +1,4 @@
-export type Category = "工作" | "生活" | "娱乐";
+export type Category = string;
 export type Filter = "all" | "favorite" | "recent" | Category;
 export interface Entry {
   id: number;

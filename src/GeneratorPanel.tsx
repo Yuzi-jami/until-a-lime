@@ -25,7 +25,11 @@ function sample(options: GeneratorOptions) {
     };
   }
 }
-export default function Generator() {
+export default function Generator({
+  onUse,
+}: {
+  onUse?: (value: string) => void;
+}) {
   const [options, setOptions] = useState(defaultGeneratorOptions);
   const [result, setResult] = useState(() => sample(defaultGeneratorOptions));
   const [copying, setCopying] = useState(false),
@@ -81,6 +85,7 @@ export default function Generator() {
       if (mounted.current) {
         ticket.current = id;
         setCopyStatus("已复制 · 30 秒后尝试自动清理。");
+        onUse?.(result.value);
       }
     } catch (error) {
       if (mounted.current)
@@ -158,6 +163,15 @@ export default function Generator() {
         </span>
       </label>
       <div className="generator-actions">
+        {onUse && (
+          <button
+            type="button"
+            disabled={!result.value || copying}
+            onClick={() => onUse(result.value)}
+          >
+            使用密码
+          </button>
+        )}
         <button
           className="generator-refresh"
           disabled={copying}
@@ -170,7 +184,7 @@ export default function Generator() {
           disabled={!result.value || copying || !ready}
           onClick={() => void copy()}
         >
-          {copying ? "正在复制…" : "复制密码"}
+          {copying ? "正在复制…" : onUse ? "使用并复制" : "复制密码"}
         </button>
       </div>
       <p className="generator-copy-status" role="status">

@@ -8,7 +8,7 @@ use chacha20poly1305::{
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -73,6 +73,13 @@ pub struct Metadata {
     pub favorite: bool,
     pub note: String,
 }
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CategoryChange {
+    pub id: u32,
+    pub from: String,
+    pub category: String,
+}
 impl Drop for Metadata {
     fn drop(&mut self) {
         self.name.zeroize();
@@ -99,6 +106,8 @@ impl Drop for Record {
 struct Data {
     next_id: u32,
     records: Vec<Record>,
+    #[serde(default)]
+    category_rules: HashMap<String, String>,
 }
 
 pub struct Vault {
@@ -157,7 +166,7 @@ fn atomic_write(path: &Path, bytes: &[u8], create: bool) -> Result<()> {
 pub(crate) fn validate(meta: &Metadata, password: Option<&str>) -> Result<()> {
     if meta.name.trim().is_empty()
         || meta.icon.chars().count() > 8
-        || !matches!(meta.category.as_str(), "工作" | "生活" | "娱乐")
+        || !valid_category(&meta.category)
     {
         return Err("账号字段无效或超出长度限制。".into());
     }
@@ -177,6 +186,29 @@ pub(crate) fn validate(meta: &Metadata, password: Option<&str>) -> Result<()> {
         }
     }
     Ok(())
+}
+pub(crate) fn valid_category(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value == value.trim()
+        && value.chars().count() <= 24
+        && !value.chars().any(char::is_control)
+}
+
+pub(crate) fn site_key(value: &str) -> String {
+    let value = value.trim();
+    let candidate = if value.contains("://") {
+        value.to_string()
+    } else {
+        format!("https://{value}")
+    };
+    if let Ok(url) = url::Url::parse(&candidate) {
+        if matches!(url.scheme(), "http" | "https") {
+            if let Some(host) = url.host_str() {
+                return host.trim_start_matches("www.").to_lowercase();
+            }
+        }
+    }
+    value.to_lowercase()
 }
 impl Vault {
     pub fn prepare_password_change(path: PathBuf, old: &str, new: &str) -> Result<Self> {
@@ -280,6 +312,7 @@ impl Vault {
             data: Data {
                 next_id: 1,
                 records: vec![],
+                category_rules: HashMap::new(),
             },
             disk: vec![],
             undo: None,
@@ -314,6 +347,11 @@ impl Vault {
         let data: Data = serde_json::from_slice(&plain).map_err(|_| "密码库内容格式无效。")?;
         if data.records.len() > MAX_ENTRIES || data.next_id == 0 || data.next_id > i32::MAX as u32 {
             return Err("密码库记录数量或编号无效。".into());
+        }
+        if data.category_rules.iter().any(|(site, category)| {
+            site.is_empty() || site.len() > 32768 || !valid_category(category)
+        }) {
+            return Err("密码库分类规则无效。".into());
         }
         let mut ids = HashSet::new();
         for record in &data.records {
@@ -423,6 +461,95 @@ impl Vault {
             .map(|record| record.meta.clone())
             .collect()
     }
+    pub fn category_rules(&self) -> HashMap<String, String> {
+        self.data.category_rules.clone()
+    }
+    pub fn categorize(&mut self, ids: &[u32], category: &str) -> Result<()> {
+        if ids.is_empty() || ids.len() > MAX_ENTRIES || !valid_category(category) {
+            return Err("请选择账号，并填写 1–24 字的分类。".into());
+        }
+        let mut next = self.data.clone();
+        for id in ids {
+            let record = next
+                .records
+                .iter_mut()
+                .find(|r| r.meta.id == *id)
+                .ok_or("账号已变化，请刷新后重试。")?;
+            record.meta.category = category.to_string();
+            let key = site_key(&record.meta.url);
+            if !key.is_empty() {
+                next.category_rules.insert(key, category.to_string());
+            }
+        }
+        self.commit(next)?;
+        self.undo = None;
+        Ok(())
+    }
+    pub fn regroup(&mut self, changes: &[CategoryChange], remember: bool) -> Result<()> {
+        if changes.is_empty() || changes.len() > MAX_ENTRIES {
+            return Err("请选择需要更换分组的账号。".into());
+        }
+        let mut seen = HashSet::new();
+        let mut next = self.data.clone();
+        let mut learned = HashMap::new();
+        for change in changes {
+            if !valid_category(&change.category) || !seen.insert(change.id) {
+                return Err("分组无效或账号重复。".into());
+            }
+            let record = next
+                .records
+                .iter_mut()
+                .find(|r| r.meta.id == change.id)
+                .ok_or("账号已变化，请重新预览。")?;
+            if record.meta.category != change.from {
+                return Err("分组已被其他操作修改，请重新预览。".into());
+            }
+            let key = site_key(&record.meta.url);
+            if remember && !key.is_empty() {
+                if learned.get(&key).is_some_and(|old| old != &change.category) {
+                    return Err("同一网站选择了不同分组，请取消记住规则后重试。".into());
+                }
+                learned.insert(key.clone(), change.category.clone());
+            }
+            // A corrected grouping must not leave its previously learned mistake active.
+            if change.from != change.category && next.category_rules.get(&key) == Some(&change.from)
+            {
+                next.category_rules.remove(&key);
+            }
+            record.meta.category = change.category.clone();
+        }
+        next.category_rules.extend(learned);
+        self.commit(next)?;
+        self.undo = None;
+        Ok(())
+    }
+    pub fn quick_save(
+        &mut self,
+        mut meta: Metadata,
+        password: &str,
+        update_id: Option<u32>,
+        separate: bool,
+    ) -> Result<()> {
+        let matches: Vec<_> = self
+            .list()
+            .into_iter()
+            .filter(|e| site_key(&e.url) == site_key(&meta.url) && e.user == meta.user)
+            .collect();
+        if let Some(id) = update_id {
+            // Update only the password: never overwrite metadata from a stale floating snapshot.
+            meta = matches
+                .into_iter()
+                .find(|e| e.id == id)
+                .ok_or("账号已变化，请重新打开保存面板。")?;
+        } else {
+            if !matches.is_empty() && !separate {
+                return Err("已有相同网站和账号，请选择更新或另存。".into());
+            }
+            meta.id = 0;
+        }
+        self.upsert(meta, Some(password))?;
+        Ok(())
+    }
     pub fn strengths(&self) -> Vec<Strength> {
         self.data
             .records
@@ -444,6 +571,16 @@ impl Vault {
     pub fn upsert(&mut self, mut meta: Metadata, password: Option<&str>) -> Result<Metadata> {
         validate(&meta, password)?;
         let mut next = self.data.clone();
+        let key = site_key(&meta.url);
+        let category_changed = meta.id == 0
+            || self
+                .data
+                .records
+                .iter()
+                .any(|r| r.meta.id == meta.id && r.meta.category != meta.category);
+        if !key.is_empty() && meta.category != "未分类" && category_changed {
+            next.category_rules.insert(key, meta.category.clone());
+        }
         if meta.id == 0 {
             if next.records.len() >= MAX_ENTRIES || next.next_id >= i32::MAX as u32 {
                 return Err("密码库已达到记录上限。".into());
@@ -561,6 +698,129 @@ mod tests {
         assert_eq!(vault.list().len(), 2);
         assert_eq!(std::fs::read(&path).unwrap(), b"externally changed");
         assert!(!original.windows(12).any(|w| w == b"new-password"));
+    }
+    #[test]
+    fn categories_and_quick_save_preserve_secrets_and_commit_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("categories.lime");
+        let master = "fictional-master-only";
+        let mut vault = Vault::create(path.clone(), master).unwrap();
+        let first = vault.upsert(meta(), Some("fictional-original")).unwrap();
+        let mut other = meta();
+        other.url = "https://other.invalid".into();
+        let second = vault.upsert(other, Some("fictional-other")).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        assert!(vault.categorize(&[first.id, 9999], "自定义").is_err());
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        assert_eq!(vault.list()[0].category, "工作");
+        vault
+            .categorize(&[first.id, second.id], "个人项目")
+            .unwrap();
+        assert_eq!(
+            vault.secret(first.id).unwrap().as_str(),
+            "fictional-original"
+        );
+        assert_eq!(vault.category_rules()["secret.invalid"], "个人项目");
+        assert!(vault
+            .quick_save(meta(), "fictional-new", None, false)
+            .is_err());
+        assert!(vault
+            .quick_save(meta(), "fictional-new", Some(second.id), false)
+            .is_err());
+        vault
+            .quick_save(meta(), "fictional-new", Some(first.id), false)
+            .unwrap();
+        assert_eq!(vault.list()[0].category, "个人项目");
+        assert_eq!(vault.list()[0].note, "private note");
+        assert_eq!(vault.secret(first.id).unwrap().as_str(), "fictional-new");
+        vault
+            .quick_save(meta(), "fictional-separate", None, true)
+            .unwrap();
+        assert_eq!(vault.list().len(), 3);
+        let reopened = Vault::open(path.clone(), master).unwrap();
+        assert_eq!(reopened.list()[0].category, "个人项目");
+        assert_eq!(reopened.category_rules()["other.invalid"], "个人项目");
+        let before = fs::read(&path).unwrap();
+        for invalid in ["", "  ", " padded", "line\nbreak"] {
+            assert!(vault.categorize(&[first.id], invalid).is_err());
+        }
+        assert_eq!(fs::read(&path).unwrap(), before);
+        fs::write(&path, b"external change").unwrap();
+        assert!(vault.categorize(&[first.id, second.id], "学习").is_err());
+        assert_eq!(vault.list()[0].category, "个人项目");
+        assert_eq!(vault.category_rules()["other.invalid"], "个人项目");
+    }
+    #[test]
+    fn legacy_data_defaults_category_rules_without_reclassifying_records() {
+        let value = serde_json::json!({ "next_id": 2, "records": [{ "meta": meta(), "password": "fictional-only" }] });
+        let data: Data = serde_json::from_value(value).unwrap();
+        assert!(data.category_rules.is_empty());
+        assert_eq!(data.records[0].meta.category, "工作");
+        assert_eq!(
+            site_key("HTTPS://WWW.Example.invalid/login?q=1"),
+            "example.invalid"
+        );
+        assert_eq!(site_key("Steam"), "steam");
+    }
+    #[test]
+    fn mixed_regroup_is_atomic_and_clears_only_obsolete_rules() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("regroup.lime");
+        let master = "fictional-master-only";
+        let mut vault = Vault::create(path.clone(), master).unwrap();
+        let first = vault.upsert(meta(), Some("fictional-one")).unwrap();
+        let mut second_meta = meta();
+        second_meta.url = "https://second.invalid".into();
+        let second = vault.upsert(second_meta, Some("fictional-two")).unwrap();
+        let changes = || {
+            vec![
+                CategoryChange {
+                    id: first.id,
+                    from: "工作".into(),
+                    category: "游戏".into(),
+                },
+                CategoryChange {
+                    id: second.id,
+                    from: "工作".into(),
+                    category: "学习".into(),
+                },
+            ]
+        };
+        let before = fs::read(&path).unwrap();
+        let mut bad = changes();
+        bad[1].from = "生活".into();
+        assert!(vault.regroup(&bad, false).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(vault.list()[0].category, "工作");
+        vault.regroup(&changes(), false).unwrap();
+        assert!(!vault.category_rules().contains_key("secret.invalid"));
+        assert!(!vault.category_rules().contains_key("second.invalid"));
+        assert_eq!(vault.secret(first.id).unwrap().as_str(), "fictional-one");
+        assert_eq!(vault.list()[0].note, "private note");
+        assert!(vault.list()[0].favorite);
+        assert!(vault.regroup(&changes(), false).is_err());
+        let next = [CategoryChange {
+            id: first.id,
+            from: "游戏".into(),
+            category: "个人项目".into(),
+        }];
+        vault.regroup(&next, true).unwrap();
+        let reopened = Vault::open(path.clone(), master).unwrap();
+        assert_eq!(reopened.list()[1].category, "学习");
+        assert_eq!(reopened.category_rules()["secret.invalid"], "个人项目");
+        fs::write(&path, b"external-change").unwrap();
+        assert!(vault
+            .regroup(
+                &[CategoryChange {
+                    id: first.id,
+                    from: "个人项目".into(),
+                    category: "娱乐".into()
+                }],
+                true
+            )
+            .is_err());
+        assert_eq!(vault.list()[0].category, "个人项目");
+        assert_eq!(vault.category_rules()["secret.invalid"], "个人项目");
     }
     #[test]
     fn browser_optional_users_and_long_fields_survive_encryption_and_editing() {

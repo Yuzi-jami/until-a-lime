@@ -11,9 +11,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { OrangeMark, Wheel, type WheelAction } from "./components";
 import type { Entry } from "./model";
+import QuickSave from "./QuickSave";
+import type { SaveContext } from "./categories";
 import "./floating.css";
 
-type FloatingLayout = "panel" | "notice" | "wheel" | "compact";
+type FloatingLayout = "panel" | "editor" | "notice" | "wheel" | "compact";
 type MotionFrame = {
   id: number;
   fromX: number;
@@ -25,7 +27,10 @@ type MotionFrame = {
 export default function Floating() {
   useTheme();
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"wheel" | "search" | "armed">("wheel");
+  const [mode, setMode] = useState<"wheel" | "search" | "save" | "armed">(
+    "wheel",
+  );
+  const [saveContext, setSaveContext] = useState<SaveContext | null>(null);
   const [query, setQuery] = useState("");
   const [accounts, setAccounts] = useState<Entry[]>([]);
   const [status, setStatus] = useState("");
@@ -45,15 +50,17 @@ export default function Floating() {
   const request = useRef(0);
   const resizeQueue = useRef<Promise<unknown>>(Promise.resolve());
   const layout =
-    mode === "search"
-      ? "panel"
-      : mode === "armed"
-        ? "notice"
-        : wheelOpen
-          ? "wheel"
-          : status || error
-            ? "notice"
-            : "compact";
+    mode === "save"
+      ? "editor"
+      : mode === "search"
+        ? "panel"
+        : mode === "armed"
+          ? "notice"
+          : wheelOpen
+            ? "wheel"
+            : status || error
+              ? "notice"
+              : "compact";
   const openChanged = useCallback((open: boolean) => {
     setWheelOpen(open);
     if (open) {
@@ -61,6 +68,26 @@ export default function Floating() {
       setError("");
     }
   }, []);
+  useEffect(() => {
+    if (mode !== "save") return;
+    let last = 0;
+    const touch = () => {
+      if (Date.now() - last < 1000) return;
+      last = Date.now();
+      void invoke("floating_touch").catch(() => {
+        request.current++;
+        setSaveContext(null);
+        setMode("wheel");
+        setError("密码库已锁定，请先解锁收藏室。");
+      });
+    };
+    window.addEventListener("pointerdown", touch);
+    window.addEventListener("keydown", touch);
+    return () => {
+      window.removeEventListener("pointerdown", touch);
+      window.removeEventListener("keydown", touch);
+    };
+  }, [mode]);
   useEffect(() => {
     if (dragging.current) return;
     let disposed = false;
@@ -224,6 +251,7 @@ export default function Floating() {
         if (disposed || payload !== "lock") return;
         request.current++;
         setAccounts([]);
+        setSaveContext(null);
         setQuery("");
         setBusy(false);
         setMode("wheel");
@@ -252,6 +280,21 @@ export default function Floating() {
     } catch (e) {
       if (token !== request.current) return;
       setError(typeof e === "string" ? e : "密码库已锁定，请先打开收藏室。 ");
+    }
+  }
+  async function openSave() {
+    setError("");
+    setStatus("");
+    const token = ++request.current;
+    try {
+      const context = await invoke<SaveContext>("quick_save_context");
+      if (token !== request.current) return;
+      setSaveContext(context);
+      setWheelOpen(false);
+      setMode("save");
+    } catch (e) {
+      if (token === request.current)
+        setError(typeof e === "string" ? e : "请先解锁收藏室。");
     }
   }
   async function arm(entry: Entry) {
@@ -284,6 +327,10 @@ export default function Floating() {
   );
   const action = (value: WheelAction) => {
     setError("");
+    if (value === "save") {
+      void openSave();
+      return;
+    }
     if (value === "search") {
       void openSearch();
       return;
@@ -329,6 +376,23 @@ export default function Floating() {
           : undefined
       }
     >
+      {mode === "save" && saveContext && (
+        <QuickSave
+          context={saveContext}
+          onClose={() => {
+            request.current++;
+            setSaveContext(null);
+            setMode("wheel");
+            setWheelOpen(false);
+          }}
+          onSaved={() => {
+            setSaveContext(null);
+            setMode("wheel");
+            setWheelOpen(false);
+            setStatus("账号已加密保存");
+          }}
+        />
+      )}
       {mode === "wheel" && (
         <Wheel
           onAction={action}
