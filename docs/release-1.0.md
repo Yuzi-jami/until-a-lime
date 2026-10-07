@@ -41,3 +41,9 @@
 QQ 等受保护输入框、系统锁屏联动、浏览器“保存当前网站”入口、同步、多设备、安卓不在 1.0 范围内。项目沿用仓库现有可见性；尚未授予开源许可或完成素材权利核验。
 
 [安装说明](https://github.com/Yuzi-jami/until-a-lime/blob/v1.0.0/docs/install.md) · [浏览器扩展说明](https://github.com/Yuzi-jami/until-a-lime/blob/v1.0.0/docs/browser-extension.md)
+
+## 2026-10-07 开发收尾
+
+首发标签的 Windows 自动检查曾因 Git 检出 CRLF 与格式要求不一致而失败。main 已固定文本 LF 检出；修复提交 `47ba541` 的 [完整 GitHub 检查](https://github.com/Yuzi-jami/until-a-lime/actions/runs/37569576608) 已通过，包括测试、静态检查及桌面发行构建。应用逻辑未改，v1.0.0 标签、安装包及其 SHA-256 保持固定。
+
+当前交接、架构、兼容性与后续计划已整理；498 项依赖元数据已按锁文件核对。安装 / 升级 / 卸载、全部真实网站与原生体验、签名、独立安全审计、许可证和素材确认仍为后续事项，详见 [当前计划](https://github.com/Yuzi-jami/until-a-lime/blob/main/docs/plan.md)。开发与首发收尾已完成，工程实训由独立作业对话处理。

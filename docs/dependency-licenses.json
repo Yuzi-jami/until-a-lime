@@ -1,6 +1,6 @@
 {
-  "date": "2026-09-20",
-  "scope": "Desktop Windows dependency metadata; license texts not audited",
+  "date": "2026-10-07",
+  "scope": "Third-party Windows Cargo dependencies and all npm lock entries (including optional platform packages); license texts not audited",
   "packages": [
     {
       "ecosystem": "cargo",
@@ -1411,12 +1411,6 @@
       "name": "universal-hash",
       "version": "0.5.1",
       "license": "MIT OR Apache-2.0"
-    },
-    {
-      "ecosystem": "cargo",
-      "name": "until-a-lime",
-      "version": "0.1.0",
-      "license": null
     },
     {
       "ecosystem": "cargo",
@@ -2983,6 +2977,18 @@
       "name": "ryu",
       "version": "1.0.23",
       "license": "Apache-2.0 OR BSL-1.0"
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "psl",
+      "version": "2.1.238",
+      "license": "MIT/Apache-2.0"
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "psl-types",
+      "version": "2.0.11",
+      "license": "MIT/Apache-2.0"
     }
   ]
 }

@@ -42,6 +42,6 @@ identifier 保持 `dev.untilalime.desktop`；真实库通常在 `%APPDATA%\dev.u
 
 ## 证据和剩余事项
 
-2026-10-06 本地前端 67 项、Rust 42 项检查通过，前端构建、格式、Clippy all-targets 和 NSIS 构建通过。GitHub 首发 CI 在干净 Windows 检出时遇到 CRLF 格式差异；2026-10-07 收尾在 .gitattributes 固定文本 LF，实际远端复核结果见 [验收记录](acceptance-report.md)。
+2026-10-06 本地前端 67 项、Rust 42 项检查通过，前端构建、格式、Clippy all-targets 和 NSIS 构建通过。GitHub 首发 CI 在干净 Windows 检出时遇到 CRLF 格式差异；2026-10-07 在 .gitattributes 固定文本 LF，修复提交 `47ba541` 的完整远端检查与桌面发行构建通过。验收与 498 项依赖元数据已补齐，开发首发收尾完成；证据见 [验收记录](acceptance-report.md)。
 
 安装包未签名，独立安全审计、独立安装 / 升级 / 卸载、全部真实网站兼容、完整 DPI / 读屏验收尚未完成。许可证与素材确认尚待所有者决定，未授予开源许可。不要把这几项写成已通过，也不要以此重新开发已经交付的功能。
