@@ -1,8 +1,12 @@
 # 当前架构
 
-2026-09-15。Rust + Tauri 2 + React + TypeScript。浏览器演示只用内存虚构数据；桌面 WebView 经 IPC 使用本地库。
+2026-10-07，桌面 1.0.0 / 扩展 0.2.0。Rust + Tauri 2 + React + TypeScript。网页预览只用内存虚构数据；桌面 WebView 经 IPC 使用本地库。
 
-React（VaultRoot/App/数据设置）→ main 窗口鉴权 → VaultService（epoch、闲置、串行提交）→ Vault（加密、校验、原子文件替换）。列表不返回密码；显示/复制分别显式请求。轮盘只导航，未扩大 capability 或 CSP。
+主窗口 React（VaultRoot / App / 数据设置 / 分类面板）→ main 命令鉴权 → VaultService（epoch、闲置、串行提交）→ Vault（加密、校验、原子文件替换）。列表只返回元数据；显示 / 复制已有密码分别显式请求。
+
+悬浮窗口 Floating / QuickSave 使用专用命令搜索元数据、复制所选账号、读取保存上下文和保存。保存请求绑定会话 epoch，更新重复账号时只替换密码，沿用后端当前元数据；成功后广播元数据变化。已有密码不批量交付给悬浮前端，管理和揭示命令仍限制 main。
+
+浏览器链路为 HTTPS 输入框建议 / 工具栏 → MV3 后台 → Native Messaging host → 127.0.0.1 桥接 → VaultService。扩展建议仅请求元数据，用户选择后才交付所选凭据；扩展后台检查目标 documentId，Rust 桥接检查会话、扩展来源和同站域名。固定 ID 和当前用户目录 token 不能防御已控制本机用户的恶意进程。
 
 格式 LIMEV001：48 字节头部作为 AAD，16 字节 salt、24 字节 nonce，Argon2id 65536 KiB / 3 次 / 并行度 1，32 字节密钥，XChaCha20-Poly1305。所有账号字段加密。限制 8 MiB / 2000 条。详见 [密码库](vault.md)。
 
@@ -10,4 +14,10 @@ React（VaultRoot/App/数据设置）→ main 窗口鉴权 → VaultService（ep
 
 剪贴板服务仅处理显式复制，30 秒或锁定/退出时核对所有权再清理，无法清除第三方历史。原子替换不能代替异地加密备份，主密码遗忘无法恢复。
 
-未来填写模块没有接入产品。C0 见 [设计](quickfill-design.md)，旧 [可行性](feasibility.md) 和 [原型](quickfill-prototype.md) 仅作历史记录，不能当作当前功能或兼容性证明。
+普通应用填写由 quick_paste 在显式选择账号后复制用户名，并在最长 20 秒的窗口内用 GetAsyncKeyState 一次性等待 Tab，再经会话检查复制所选密码。用户自行粘贴；没有 SendInput / UIA 或自动提交。Esc、锁定、超时和显式取消终止等待，无用户名记录直接复制密码。
+
+分类规则以 category_rules 可选字段保存在加密数据内。读旧库默认为空，不自动改分组；分组预览携带原分类并整批提交，写盘失败或并发变化拒绝整批。
+
+浮窗尺寸与贴边动画由 floating_layout 管理，位置持久化由 placement 管理。主程序和 host 随 NSIS 分发，扩展文件嵌入程序，在用户准备 / 已启用连接恢复时部署到当前用户目录；不静默安装浏览器扩展。
+
+旧 [填写设计](quickfill-design.md)、[可行性](feasibility.md) 和 [原型](quickfill-prototype.md) 仅作历史记录，不能作为当前实现或兼容性证明。

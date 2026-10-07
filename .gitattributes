@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Keep text checkout identical on Windows and in CI; binary assets stay binary.
+* text=auto eol=lf

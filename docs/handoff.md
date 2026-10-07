@@ -1,133 +1,47 @@
 # 开发交接总结
 
-> 2026-09-20 填写追补：用户确认此前只按 Tab，未明确使用扩展。已补扩展 Alt+Shift+L 与加载说明、修复受控表单按字段派发事件的顺序；只读核对 xcpcai.com 登录框，未验证真实浏览器扩展端到端。旧 Steam 专用快捷键路径已移除，改为悬浮轮盘普通应用剪贴板连续填写：复制用户名后一次性等待 Tab，最长 20 秒，再切换密码剪贴板；不使用 SendInput/UIA。最新证据在验收报告末段；下方“C1 未执行/产品未接入”为历史基线，不再代表实现状态。旧 QQ/输入原型仍暂停，视觉设计仍等待用户。
+更新：2026-10-07。项目为 Windows 个人密码工具“直到密码变成一颗酸橙”，Rust + Tauri 2 + React + TypeScript。桌面版本 1.0.0，浏览器扩展独立版本 0.2.0；不要重新选型或另建密码库。
 
-> 2026-09-20：按需验证、CSV 和浏览器扩展新增实现，参见验收报告最新追加段、browser-csv.md、browser-extension.md。用户已要求停止自主视觉设计，保持现有样式，等待其设计稿。下面仍包含旧基础阶段记录。
+GitHub：`Yuzi-jami/until-a-lime`，保持私有。首发 [v1.0.0](https://github.com/Yuzi-jami/until-a-lime/releases/tag/v1.0.0) 对应提交 `667c1d5d9308a2d6ddcb9b3171e9ea1134964e23`，包含安装包与校验文件。收尾后的 main 可包含文档和构建配置维护提交，发布标签与安装包不随之改写。
 
-> 2026-09-15 基础实施后续见 [本轮验收报告](acceptance-report.md) 和更新后的 [计划](plan.md)。以下保留 09-14 基线交接，不代表最新测试结果。
+## 当前行为
 
-更新：2026-09-14。执行步骤和验收要求见 [详细计划](plan.md)。本次只核对代码并整理交接，没有修改产品功能、重新启动应用或重跑完整测试。
+- 本地加密收藏室：创建 / 解锁、搜索、收藏、增删改、删除撤销、强度统计、备份 / 恢复 / 改密和浏览器 CSV 导入。
+- 默认按需验证：进入普通入口无需密码，首次访问账号时验证；关闭只隐藏，未到期会话恢复无需重复输入。手动锁定、闲置到期、完全退出后重新验证。
+- 橙色无叶子图标、悬停旋转、直接拖动、贴边半隐藏；主窗交通灯与右上角隐藏式 Windows 按钮并存。
+- 悬浮窗内搜索账号并连续复制：先复制用户名，20 秒内按 Tab 再复制密码，由用户自行粘贴；无用户名记录直接复制密码。无输入模拟或自动提交。
+- 悬浮快速保存，生成器位于二级面板；重复账号显式选择更新或另存。分类默认留空归未分类，完整下拉可选 / 新建，网站建议显式采用。
+- 分类分为建议和手动两个页面，支持预览、多选、整批原子提交和详情快捷换组；旧账号不会因升级自动重新分类。
+- Edge / Chrome HTTPS 登录建议、iframe、同站域匹配、Native Messaging 和后台恢复；首次加载或新增权限仍需浏览器确认，锁定不会自动解锁。
+- 浅深色、自定义闲置 1–1440 分钟（另可关闭）、托盘、单实例、位置记忆。闲置状态以 Rust 服务为准。
 
-## 1. 项目目标与用户决定
+## 代码与文档导航
 
-**直到密码变成一颗酸橙**：Windows 个人本地密码工具，以课程设计和自用为起点，逐步达到可维护的开源项目水平。技术为 Rust + Tauri 2 + React + TypeScript，不重新选型、不另起项目。
+| 文件 | 职责 |
+| --- | --- |
+| src/VaultRoot.tsx、src/App.tsx | 主窗口验证、收藏室与元数据交互 |
+| src/Floating.tsx、src/QuickSave.tsx、src/GeneratorPanel.tsx | 悬浮状态、快速保存、二级生成器 |
+| src/CategoryPicker.tsx、src/CategoryOrganizer.tsx、src/QuickGroup.tsx | 分类选择、批量整理、详情换组 |
+| src/categories.ts、src/category-catalog.ts | 本地分类规则与公共域名库 |
+| src-tauri/src/lib.rs、floating_layout.rs、placement.rs | IPC、托盘、窗口、拖动、吸附与位置 |
+| src-tauri/src/vault.rs、vault_service.rs | 加密、数据提交、会话、授权和票据 |
+| src-tauri/src/quick_paste.rs、clipboard.rs | 20 秒一次性 Tab 等待与剪贴板序号清理 |
+| src-tauri/src/browser_bridge.rs、browser_protocol.rs、bin/lime-browser-host.rs | 浏览器桥接、同站授权与本机 host |
+| extension/ | Manifest V3 后台、输入框建议与填写 |
+| scripts/Check-Desktop.ps1、.github/workflows/desktop.yml | 本机统一检查与 Windows CI |
 
-长期希望通过通用搜索和快捷面板支持 Edge、Chrome、Steam 等普通应用，用户接受技术与难度的取舍。目前不能将这些目标应用标记为已兼容，微信也没有完成适配证明。
+当前 [架构](architecture.md)、[密码库](vault.md)、[保存与分类](quick-save-and-categories.md)、[浏览器扩展](browser-extension.md) 和 [计划](plan.md) 是接手入口。验收记录按日期追加，以最新段落为准；[旧交接](history/handoff-2026-09-20.md) 和旧原型仅用于历史追溯。
 
-已确定的偏好和范围：
+## 数据与范围约束
 
-- 中文名称保留“酸橙”，主视觉是橙色。灵感来自《明日方舟》“直到大地变成一颗酸橙”活动，适度圆角，统一深浅色风格。分发素材应原创或许可明确。
-- 无叶子的橙子图标，悬停旋转、展开轮盘，直接按住图标拖动，不恢复底部长条拖动方式。
-- 主窗口称“收藏室”；关闭只隐藏到托盘，未锁定时恢复不需重新输入主密码。
-- 手动锁定、闲置到期、完全退出后重新启动需要主密码。闲置默认 5 分钟，可选 1/5/15 分钟或关闭；隐藏窗口仍受闲置策略约束。
-- 系统锁屏、会话切换、休眠通知联动明确不接入，不因“安全优化”重新加入。
-- QQ 受保护密码框明确排除；旧输入原型继续暂停。安卓、云同步、Windows Hello 延后，不自动提交登录、不自动提权。
-- 按大阶段汇报，阶段内自主实现、检查和更新文档，不逐个功能请求确认。
+identifier 保持 `dev.untilalime.desktop`；真实库通常在 `%APPDATA%\dev.untilalime.desktop\vault.lime`，不读取、解密、改写或上传。测试只用虚构数据及临时目录。Debug / Release 共用库与单实例标识；不强制终止可能含草稿的旧实例。
 
-用户将切换其他模型完成基础工作，最后回到原模型验收。本交接不代表已经通过独立安全审计或最终产品验收。
+保持 `LIMEV001`、Argon2id / XChaCha20-Poly1305 约定及原子提交；锁定推进 epoch，过期请求拒绝。main 承载管理操作；floating 的搜索、保存和连续复制走专用受限命令，不能从前端批量读取已有密码。
 
-## 2. 当前状态
+不恢复 QQ 等保护输入框适配、历史 windows-validation / UIA / SendInput 实验；不加系统锁屏联动、安卓或同步。课程作业交给独立对话，本对话只负责开发与上传。
 
-| 领域       | 已有实现                                                           | 证据与限制                                                            |
-| ---------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| 桌面基础   | 主窗口、透明置顶轮盘、托盘、单实例、位置记忆                       | 用户认可图标拖动；历史脚本验证隐藏和重复启动，未覆盖所有 DPI/屏幕组合 |
-| 界面       | 橙色主题、浅/深/系统主题、搜索分类收藏、编辑、删除确认与 10 秒撤销 | 有 React 和规则测试；完整视觉回归、真实读屏待验收                     |
-| 生成器     | 8–64 位、字符类型选择、排除易混淆字符、选中类型至少各出现一次      | 有规则测试；复制使用后台剪贴板清理                                    |
-| 密码库     | 创建/解锁、加密保存、原子替换、上一修订备份与恢复                  | 核心自动化覆盖已有，原生全业务链待验收                                |
-| 数据维护   | 改主密码、导出加密备份、导入追加、空库导入                         | 实现和模拟 IPC 测试已有，不要重复开发                                 |
-| 会话       | Rust 状态、后台闲置检查、epoch 防止迟到认证恢复权限                | 主窗口关闭已只隐藏，但关闭后恢复解锁状态缺原生验证                    |
-| 跨应用填写 | 有设计和历史实验                                                   | 当前 Tauri 产品未接入，复制按钮不等于自动填写                         |
-| 发布       | 开发构建、启动脚本                                                 | `bundle.active=false`，安装包、发布流程、许可证尚未完成               |
+## 证据和剩余事项
 
-## 3. 最近修改与待解决问题
+2026-10-06 本地前端 67 项、Rust 42 项检查通过，前端构建、格式、Clippy all-targets 和 NSIS 构建通过。GitHub 首发 CI 在干净 Windows 检出时遇到 CRLF 格式差异；2026-10-07 收尾在 .gitattributes 固定文本 LF，实际远端复核结果见 [验收记录](acceptance-report.md)。
 
-### 收藏室关闭行为
-
-已核对 `src-tauri/src/lib.rs`：`CloseRequested` 只阻止销毁、保存轮盘位置并隐藏，没有调用 `lock_all` 或发送 `lime-action=lock`。托盘退出和手动锁定仍调用 `lock_all`。
-
-目标行为是“隐藏不主动锁定，闲置计时仍继续”，不能承诺隔多久恢复都免密码。不要将隐藏改成销毁后重建 WebView：`VaultRoot` 初始化含锁定逻辑，重新挂载可能结束会话。
-
-本次未核实当前运行进程是否加载最新构建；必须补原生验收。上轮回复的 `/workspace/9878890352bd/...` 链接不是当前工作区，不能继续沿用。
-
-### 伴生控制台窗口
-
-用户报告 debug EXE 同时打开命令行窗口，关闭它会结束应用。已核对 `src-tauri/src/main.rs`：
-
-```rust
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-```
-
-只有非调试构建启用 Windows GUI 子系统，debug 仍是控制台程序。启动脚本已经使用 `Start-Process -WindowStyle Hidden`，仅重复增加 Hidden 不是完整修复，直接双击 debug EXE 仍需处理。
-
-之前将原因单纯解释为“启动脚本宿主”不够准确。下一阶段检查 PE 子系统、实际启动路径和父子进程关系，再验证修复；静态属性不能证明用户每次启动场景的全部原因。
-
-### 蓝屏与旧原型
-
-历史记录是 BugCheck `0x3B` / 访问冲突。用户怀疑 QQ 驱动，但尚无转储分析证明具体故障驱动，不能写成“已证实 QQ 导致”。见 `docs/incident-2026-09-10.md`。
-
-不运行 `crates/windows-validation`，也不运行 `Start-QuickFillDemo.ps1`、`Test-WindowsValidation.ps1`、`Inspect-QqLogin.ps1`、`Probe-Accessibility.ps1` 等历史输入/探测流程。更早的手动重试授权不等于本轮恢复这些原型。后续受控填写按计划 C 独立推进。
-
-## 4. 代码导航
-
-| 文件                                                      | 职责和接手关注点                                               |
-| --------------------------------------------------------- | -------------------------------------------------------------- |
-| `src-tauri/src/main.rs`                                   | Windows 子系统入口，控制台问题优先排查点                       |
-| `src-tauri/src/lib.rs`                                    | IPC 注册、窗口、托盘、关闭隐藏、单实例、每秒后台闲置检查       |
-| `src-tauri/src/vault.rs`                                  | 文件格式、KDF/AEAD、验证、原子提交、恢复、改密、导入导出与测试 |
-| `src-tauri/src/vault_service.rs`                          | 窗口鉴权、epoch、锁定、文件选择票据、异步提交                  |
-| `src-tauri/src/clipboard.rs`                              | 剪贴板所有权、30 秒清理、锁定/退出清理                         |
-| `src-tauri/src/placement.rs`                              | 浮窗坐标保存、恢复、屏幕边界                                   |
-| `src-tauri/tauri.conf.json`、`capabilities/default.json`  | 窗口、CSP、权限、打包；不为方便扩大权限                        |
-| `src/main.tsx`、`src/VaultRoot.tsx`                       | 按 surface 分流，桌面创建/解锁与浏览器演示分支                 |
-| `src/App.tsx`                                             | 收藏室主体、账号操作、IPC、活动上报、锁定与变更监听            |
-| `src/DataSettings.tsx`、`src/ImportPanel.tsx`             | 改密、导出、导入、错误处理                                     |
-| `src/Floating.tsx`、`src/orange-mark.svg`                 | 轮盘、拖动、图标、键盘交互                                     |
-| `src/useIdleLock.ts`、`src/preferences.ts`                | 前端闲置和偏好；后台仍是权限依据                               |
-| `src/style.css`、`src/components.tsx`                     | 共用外观；CSS 有长行/追加段，不顺手全量重写                    |
-| `tests/*.test.tsx`、`scripts/*.test.mjs`                  | 模拟 IPC 交互、生成器、删除撤销和偏好测试                      |
-| `scripts/Start-LimeDesktop.ps1`、`Test-LimeLifecycle.ps1` | 当前仅定位 debug EXE；生命周期脚本不证明密码库仍解锁           |
-
-## 5. 不可退化的数据边界
-
-- 格式 `LIMEV001`，48 字节头部为 AAD，16 字节 salt、24 字节 nonce；Argon2id 为 65536 KiB / 3 次 / 并行度 1，32 字节密钥，XChaCha20-Poly1305，每次写入新 nonce。基础任务不改算法、参数和格式。
-- 所有账号字段加密；最多 8 MiB、2000 条。主密码规则和格式详情见 `docs/vault.md`。
-- 只有 `main` 可访问密码库命令，轮盘当前只导航；列表没有密码，显示/复制是独立显式请求。
-- 密码库通常在 `%APPDATA%\dev.untilalime.desktop\vault.lime`，以 Tauri 解析为准。不要读出真实库内容、覆盖用户库或把真实账号用于测试。
-- 写入成功后才更新内存，异常保留原库；恢复保留恢复前密文。改密后的旧 `.bak` 可能仍用旧主密码，不是文件损坏。
-- 锁定推进 epoch，迟到异步结果不能重新解锁或提交；跨会话文件选择票据必须失效。
-- 清理剪贴板前核对是否仍属于本次复制，不能抹掉用户之后复制的内容；不能保证清除第三方历史。
-- 密码不进入日志、localStorage、URL、截图和报告；Rust zeroize 和前端清屏不等于清除操作系统中的所有副本。
-
-## 6. 环境与测试证据
-
-交接文件保存在当前项目的 docs 目录。不同模型会话的挂载路径可能变化，接手必须先运行 Get-Location 并核对项目文件，不把聊天中的历史绝对路径写死进脚本。
-
-本轮文件搜索未发现项目内 `AGENTS.md`。此前 `git diff` 返回不是 Git 仓库；接手需重新核实，不编造提交号或变更基线。
-
-Windows / PowerShell、Node 24、Rust MSVC、Visual Studio C++ 工具、Windows SDK、WebView2。Cargo 默认成员是桌面工程，测试显式用 `-p until-a-lime`。当前 dev/preview 端口为 1420，历史浏览器 4173 不作配置依据。
-
-按需分别运行并检查退出码：
-
-```powershell
-npm.cmd ci
-npm.cmd run format:check
-npm.cmd test
-npm.cmd run build
-cargo fmt --all -- --check
-cargo clippy -p until-a-lime --locked -- -D warnings
-cargo test -p until-a-lime --locked
-npm.cmd run tauri -- build --debug --no-bundle
-```
-
-依赖缺失或需重建一致环境才运行 `npm ci`；纯文档修改不需要完整构建。格式检查包括历史 crate 不等于允许运行旧原型。
-
-历史完整验证曾为 Rust 15 项、React IPC 9 项、Node 规则 6 项通过，Clippy、格式、前端/Tauri debug 构建通过；npm 依赖审计当时未报告漏洞。最近关闭行为修改轮次可见 Rust 15 项、React 9 项、Clippy 和构建成功，但最后 Node 子测试输出未完整取回。**这是历史证据，不是本轮重新测试或安全认证。**
-
-上轮 EXE 曾被进程占用，核对路径并停止本项目实例后构建成功。接手不要按名称结束全部同名程序。优先正常退出，确认无未保存编辑，必要时才操作核实的 PID。
-
-## 7. 交接出口
-
-从 `plan.md` 的 P0 开始依次做 P1–P3；C0 仅设计和无输入副作用的测试骨架，C1 不在这次基础交付中执行。
-
-阶段完成更新计划，把实际命令、退出码、原生检查、产物路径和未完成项写入 `docs/acceptance-report.md`。没有实际执行就标“未执行”，不能把编译通过改写成原生体验已验收。最后由用户切回原模型集中审查。
-
+安装包未签名，独立安全审计、独立安装 / 升级 / 卸载、全部真实网站兼容、完整 DPI / 读屏验收尚未完成。许可证与素材确认尚待所有者决定，未授予开源许可。不要把这几项写成已通过，也不要以此重新开发已经交付的功能。

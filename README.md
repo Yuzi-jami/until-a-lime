@@ -45,7 +45,7 @@ npm run tauri -- build
 - [1.0 版本说明](docs/release-1.0.md)、[实际验收记录](docs/acceptance-report.md)
 - [本地密码库](docs/vault.md)、[CSV 导入](docs/browser-csv.md)、[快速保存与分类](docs/quick-save-and-categories.md)
 - [工作交接总结](docs/handoff.md)、[阶段计划](docs/plan.md)、[贡献指南](CONTRIBUTING.md)
-- [UI 设计](docs/ui-design.md)、[历史架构记录](docs/architecture.md)、[安全范围](SECURITY.md)
+- [UI 设计](docs/ui-design.md)、[当前架构](docs/architecture.md)、[安全范围](SECURITY.md)
 
 1.0 是个人使用与课程设计里程碑，未经过独立安全审计。自动检查覆盖前端交互模型、密码库加密与失败原子性、会话授权和浏览器 DOM 模型，不代表全部真实网站或原生环境兼容。安装、升级、卸载及完整键盘 / 屏幕阅读器体验仍待独立人工验收。
 
