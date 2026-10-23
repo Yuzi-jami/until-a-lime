@@ -359,3 +359,10 @@ Steam 进程名白名单不等于可信签名验证；CEF 内部字段不能通�
 - 初次将 AppHandle 直接带入桥接导致测试进程启动报 STATUS_ENTRYPOINT_NOT_FOUND，改为注入保存通知回调后完整 Rust 测试正常通过，主界面仍可接收保存后的刷新事件。
 - npm run tauri -- build 成功，主程序版本资源 1.1.0。最终 NSIS：target/release/bundle/nsis/直到密码变成一颗酸橙_1.1.0_x64-setup.exe，2,557,485 字节，2026-10-23 17:56:05，SHA-256 fcc0a00a132b364b746714111f266eb99cae0a32ae10cc81a96507a1a2ffce2a。未运行安装器、未自动启动日常实例、未上传。
 - 学校真实账号登录、网站改密成功判断、完整安装 / 升级 / 卸载、Chrome 原生扩展全链路和独立安全审计仍未验证。默认保存前需用户确认网站操作成功。使用与升级见 release-1.1.md；本轮不扩大到其他功能。
+
+### 2026-10-23 GitHub 1.1.0 发布
+
+- 用户确认上传后，源码提交 `4fab496fa15b0c58c507066b95cd81b58e46dda0` 同步到 main，附注标签 v1.1.0 指向同一提交；远端 Git tree 与本地一致。Git 直连遇到连接重置，改用 GitHub API 上传相同 Git 对象并核对，不强制覆盖分支。
+- 发布前重新运行本地统一检查：118 项测试、格式、前端构建及 Rust Clippy 通过；9 份文档的 42 个本地链接通过。该提交的 [GitHub Windows 检查](https://github.com/Yuzi-jami/until-a-lime/actions/runs/39937895505) 结论 success，统一检查和桌面发行构建均通过。
+- [v1.1.0](https://github.com/Yuzi-jami/until-a-lime/releases/tag/v1.1.0) 于 2026-10-23 18:46:45（Asia/Shanghai）正式发布，非草稿、非预发布；包含 `Until-a-lime_1.1.0_x64-setup.exe` 和 `SHA256SUMS.txt`。GitHub 返回的安装包大小 2,557,485 字节，SHA-256 与上述本地构建一致。英文文件名仅为发行别名。
+- 仓库保持私有，v1.0.0 安装包 SHA-256 仍为 `d051bed152723fb9dad7a273ce24241ef3583b6214d97ad5a1f5f74b65d9fe06`。未上传真实密码库、账号导出、个人附件、浏览器资料或桥接凭据。此次发布未运行安装器，原有人工验收边界不变。
