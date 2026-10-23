@@ -239,8 +239,17 @@ pub fn run() {
                 vault_service::VaultService::new(app.path().app_data_dir()?.join("vault.lime"));
             app.manage(vault.clone());
             app.manage(
-                browser_bridge::BrowserBridge::start(app.path().app_data_dir()?, vault.clone())
-                    .ok(),
+                browser_bridge::BrowserBridge::start(
+                    app.path().app_data_dir()?,
+                    vault.clone(),
+                    Some(Box::new({
+                        let handle = app.handle().clone();
+                        move || {
+                            let _ = handle.emit("lime-vault-changed", ());
+                        }
+                    })),
+                )
+                .ok(),
             );
             let vault_app = app.handle().clone();
             std::thread::spawn(move || loop {

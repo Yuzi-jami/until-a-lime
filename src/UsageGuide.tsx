@@ -1,7 +1,7 @@
 export default function UsageGuide() {
   return (
     <section className="usage-guide">
-      <span className="eyebrow">UNTIL / A LIME — 1.0.0</span>
+      <span className="eyebrow">UNTIL / A LIME — 1.1.0</span>
       <h2>直到密码变成一颗酸橙</h2>
       <p>让账号随手可用。</p>
       <details>
@@ -28,7 +28,7 @@ export default function UsageGuide() {
         <details>
           <summary>浏览器填写</summary>
           <p>
-            在“浏览器插件”中完成一次连接和安装。收藏室解锁后，点击网站登录框即可选择账号填写。
+            在“浏览器插件”中完成一次连接和安装。收藏室解锁后，点击网站登录框即可选择账号填写。当前子站与上次使用的账号优先。提交新账号或修改密码后，确认网站操作成功，再点击酸橙提示保存；也可从插件选择“保存当前页面账号”。
           </p>
         </details>
         <details>

@@ -42,11 +42,61 @@ impl Drop for Credential {
 #[derive(serde::Serialize, Default)]
 pub struct Reply {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub proposal: Option<SaveProposal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unchanged: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<BrowserEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credential: Option<Credential>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+#[derive(serde::Serialize)]
+pub struct SaveProposal {
+    pub ticket: String,
+    pub site: String,
+    pub user: String,
+    pub entries: Vec<BrowserEntry>,
+    pub can_create: bool,
+}
+// Keep only origin and path. Query strings and fragments can contain login tokens.
+pub fn page_key(value: &str, expected_origin: &str) -> Result<String, String> {
+    if origin(value)? != expected_origin || value.len() > 8192 {
+        return Err("登录页面来源已变化。".into());
+    }
+    let mut url = url::Url::parse(value).map_err(|_| "网站地址无效。")?;
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url.to_string())
+}
+pub fn site_rank(saved: &str, page: &str) -> (u8, usize) {
+    let saved = if saved.contains("://") {
+        saved.to_owned()
+    } else {
+        format!("https://{saved}")
+    };
+    let (Ok(a), Ok(b)) = (url::Url::parse(&saved), url::Url::parse(page)) else {
+        return (0, 0);
+    };
+    if a.host_str() != b.host_str() {
+        return (0, 0);
+    }
+    let path = a.path().trim_end_matches('/');
+    let target = b.path().trim_end_matches('/');
+    if path == target {
+        (3, path.len())
+    } else if !path.is_empty()
+        && target
+            .strip_prefix(path)
+            .is_some_and(|tail| tail.starts_with('/'))
+    {
+        (2, path.len())
+    } else {
+        (1, 0)
+    }
 }
 
 pub fn origin(value: &str) -> Result<String, String> {
@@ -116,7 +166,11 @@ pub fn site_label(saved: &str) -> String {
         .unwrap_or_default()
 }
 impl BrowserBridge {
-    pub fn start(directory: PathBuf, service: VaultService) -> Result<Self, String> {
+    pub fn start(
+        directory: PathBuf,
+        service: VaultService,
+        on_saved: Option<Box<dyn Fn() + Send>>,
+    ) -> Result<Self, String> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|_| "浏览器连接不可用。")?;
         let mut random = [0; 32];
         rand_core::OsRng
@@ -159,6 +213,11 @@ impl BrowserBridge {
                     error: Some(error),
                     ..Reply::default()
                 });
+                if reply.saved == Some(true) {
+                    if let Some(notify) = &on_saved {
+                        notify();
+                    }
+                }
                 if let Ok(bytes) = serde_json::to_vec(&reply) {
                     let bytes = Zeroizing::new(bytes);
                     let _ = write_frame(&mut stream, &bytes);
@@ -247,6 +306,10 @@ fn prepare_extension(bridge: &BrowserBridge) -> Result<PathBuf, String> {
             include_bytes!("../../extension/suggestions.js").as_slice(),
         ),
         (
+            "capture.js",
+            include_bytes!("../../extension/capture.js").as_slice(),
+        ),
+        (
             "icon.png",
             include_bytes!("../../extension/icon.png").as_slice(),
         ),
@@ -314,7 +377,7 @@ mod tests {
         use std::net::TcpStream;
         let dir = tempfile::tempdir().unwrap();
         let vault = VaultService::new(dir.path().join("fictional.lime"));
-        let bridge = BrowserBridge::start(dir.path().into(), vault).unwrap();
+        let bridge = BrowserBridge::start(dir.path().into(), vault, None).unwrap();
         let send = |token: &str, extension: &str| {
             let mut stream = TcpStream::connect(("127.0.0.1", bridge.port)).unwrap();
             stream
@@ -327,6 +390,7 @@ mod tests {
                     operation: "list".into(),
                     origin: "https://example.invalid".into(),
                     id: None,
+                    ..Request::default()
                 },
             })
             .unwrap();

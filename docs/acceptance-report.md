@@ -348,3 +348,14 @@ Steam 进程名白名单不等于可信签名验证；CEF 内部字段不能通�
 修复提交 `47ba541c47531acf20be8025fbaa535024eb4445` 的 [GitHub Desktop checks](https://github.com/Yuzi-jami/until-a-lime/actions/runs/37569576608) 于 2026-10-07 完成，结论为 success。干净 Windows runner 的 checkout、npm ci、统一检查脚本（前端格式 / 测试 / 构建、Rust fmt / Clippy / 测试、host 构建）以及 `npm run tauri -- build --no-bundle` 全部通过，未跳过检查、未放宽规则。
 
 最终追补只更新验收记录、依赖元数据与版本说明，不改变上述已验证的应用代码或构建配置；提交注明跳过重复 CI，按本地文档链接 / JSON / 锁文件核对验收。首发 v1.0.0 的旧运行记录保留失败事实，当前 main 已修复。此次开发与 GitHub 首发收尾完成，未执行的人工验收与正式发行事项仍按 plan.md 单列。
+
+## 2026-10-23 浏览器保存与子站排序（本地 1.1.0）
+
+- 范围仅为浏览器新账号保存 / 密码更新确认，以及当前子站、路径和上次填写账号排序。桌面 1.1.0 / 扩展 0.3.0；固定扩展 ID、应用标识与加密算法不变。未上传 GitHub，已发布的 v1.0.0 不变。
+- capture 只生成最多 120 秒的 Rust 内存待确认请求；确认才写入加密库。覆盖精确主机 / 端口 / 用户名，更新保留当前元数据，原密码或账号期间变化拒绝覆盖。锁定、闲置到期、退出清除请求，采集不延长闲置会话。浏览器 storage.session 只存提示元数据与票据，不存密码。
+- 输入框与工具栏均按实际登录文档排序，支持 iframe；iam.wit.edu.cn/login 的虚构记录优先于同注册域其他子站。显式填写成功后记忆当前页面选择，偏好加密保存；不保存 query / fragment。旧库默认空偏好，新增字段后不支持直接降级到严格校验的 1.0，升级前应导出加密备份。
+- 最终本地格式、TypeScript / Vite、Rust fmt 与 Clippy all-targets（警告视为错误）通过。React 41、Node 32、Rust 库 43 + host 2，共 118 项测试通过。覆盖改密字段、手动保存、合成点击拒绝、同源跳转恢复、跨来源 / 框架拒绝、短期票据、锁定 / 超时 / 重放拒绝、原记录变化拒绝及重开后排序记忆。
+- 独立无头 Edge 使用全新测试 profile、虚构 HTTPS 表单及模拟通信，真实点击登录只采集一次，真实点击确认显示保存成功；浅色 / 深色截图已目视核对，保存在忽略目录 .acceptance。真实 Native Messaging host 另在临时 APPDATA 与模拟桥接中通过 stdio / TCP 往返和错误扩展来源拒绝验证；修正该脚本遗漏的 browser-enabled 前置条件。没有连接个人浏览器或真实密码库。
+- 初次将 AppHandle 直接带入桥接导致测试进程启动报 STATUS_ENTRYPOINT_NOT_FOUND，改为注入保存通知回调后完整 Rust 测试正常通过，主界面仍可接收保存后的刷新事件。
+- npm run tauri -- build 成功，主程序版本资源 1.1.0。最终 NSIS：target/release/bundle/nsis/直到密码变成一颗酸橙_1.1.0_x64-setup.exe，2,557,485 字节，2026-10-23 17:56:05，SHA-256 fcc0a00a132b364b746714111f266eb99cae0a32ae10cc81a96507a1a2ffce2a。未运行安装器、未自动启动日常实例、未上传。
+- 学校真实账号登录、网站改密成功判断、完整安装 / 升级 / 卸载、Chrome 原生扩展全链路和独立安全审计仍未验证。默认保存前需用户确认网站操作成功。使用与升级见 release-1.1.md；本轮不扩大到其他功能。

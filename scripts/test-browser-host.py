@@ -13,6 +13,7 @@ def read(s,n):
  return b
 with tempfile.TemporaryDirectory() as folder:
  app=Path(folder)/'dev.untilalime.desktop';app.mkdir()
+ (app/'browser-enabled').write_text('enabled')
  listener=socket.socket();listener.bind(('127.0.0.1',0));listener.listen(1);listener.settimeout(5)
  token='a'*64
  (app/'browser-bridge.json').write_text(json.dumps({'port':listener.getsockname()[1],'token':token}))

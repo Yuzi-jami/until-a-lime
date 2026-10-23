@@ -32,12 +32,33 @@ pub fn allowed_extension(origin: &str) -> bool {
     origin == format!("chrome-extension://{EXTENSION_ID}/")
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub operation: String,
     pub origin: String,
     pub id: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credential: Option<SubmittedCredential>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticket: Option<String>,
+}
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubmittedCredential {
+    pub user: String,
+    pub password: String,
+    #[serde(default)]
+    pub password_change: bool,
+}
+impl Drop for SubmittedCredential {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.user.zeroize();
+        self.password.zeroize();
+    }
 }
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]

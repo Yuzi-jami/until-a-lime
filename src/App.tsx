@@ -579,7 +579,7 @@ export default function App({
               {title}
             </div>
             <span className="demo-label">
-              1.0 · {persistent ? "本地加密" : "虚构数据预览"}
+              1.1 · {persistent ? "本地加密" : "虚构数据预览"}
             </span>
             <button
               className="icon-button"

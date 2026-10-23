@@ -108,6 +108,8 @@ struct Data {
     records: Vec<Record>,
     #[serde(default)]
     category_rules: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    browser_preferences: HashMap<String, u32>,
 }
 
 pub struct Vault {
@@ -313,6 +315,7 @@ impl Vault {
                 next_id: 1,
                 records: vec![],
                 category_rules: HashMap::new(),
+                browser_preferences: HashMap::new(),
             },
             disk: vec![],
             undo: None,
@@ -352,6 +355,14 @@ impl Vault {
             site.is_empty() || site.len() > 32768 || !valid_category(category)
         }) {
             return Err("密码库分类规则无效。".into());
+        }
+        if data.browser_preferences.len() > MAX_ENTRIES
+            || data
+                .browser_preferences
+                .iter()
+                .any(|(page, id)| page.len() > 8192 || *id == 0)
+        {
+            return Err("密码库网站偏好无效。".into());
         }
         let mut ids = HashSet::new();
         for record in &data.records {
@@ -567,6 +578,20 @@ impl Vault {
             .find(|record| record.meta.id == id)
             .map(|record| Zeroizing::new(record.password.clone()))
             .ok_or("账号不存在。".into())
+    }
+    pub fn browser_preference(&self, page: &str) -> Option<u32> {
+        self.data.browser_preferences.get(page).copied()
+    }
+    pub fn remember_browser_account(&mut self, page: &str, id: u32) -> Result<()> {
+        if self.browser_preference(page) == Some(id) {
+            return Ok(());
+        }
+        let mut next = self.data.clone();
+        if next.browser_preferences.len() >= MAX_ENTRIES {
+            next.browser_preferences.clear();
+        }
+        next.browser_preferences.insert(page.into(), id);
+        self.commit(next)
     }
     pub fn upsert(&mut self, mut meta: Metadata, password: Option<&str>) -> Result<Metadata> {
         validate(&meta, password)?;

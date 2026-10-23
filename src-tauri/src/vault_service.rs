@@ -10,7 +10,17 @@ use std::{
 use tauri::{Emitter, Manager};
 use zeroize::Zeroizing;
 
+struct BrowserPending {
+    ticket: String,
+    site: String,
+    page: String,
+    user: String,
+    password: Zeroizing<String>,
+    candidates: Vec<(Metadata, Zeroizing<String>)>,
+    deadline: std::time::Instant,
+}
 struct State {
+    browser_pending: Vec<BrowserPending>,
     vault: Option<Vault>,
     epoch: u64,
     busy: bool,
@@ -43,6 +53,7 @@ impl VaultService {
         Self {
             path,
             state: Arc::new(Mutex::new(State {
+                browser_pending: vec![],
                 vault: None,
                 epoch: 0,
                 busy: false,
@@ -56,6 +67,7 @@ impl VaultService {
     pub fn lock(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.vault = None;
+            state.browser_pending.clear();
             state.import_file = None;
             state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
@@ -79,11 +91,18 @@ impl VaultService {
         {
             state.csv_import = None;
         }
+        state
+            .browser_pending
+            .retain(|p| p.deadline > std::time::Instant::now());
+        if state.vault.is_none() || Self::expired(&state) {
+            state.browser_pending.clear();
+        }
         if let Some(vault) = state.vault.as_mut() {
             vault.expire_undo();
         }
         if Self::expired(&state) {
             state.vault = None;
+            state.browser_pending.clear();
             state.import_file = None;
             state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
@@ -101,6 +120,7 @@ impl VaultService {
         }
         if Self::expired(&state) {
             state.vault = None;
+            state.browser_pending.clear();
             state.import_file = None;
             state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
@@ -201,10 +221,24 @@ impl VaultService {
         &self,
         request: crate::browser_protocol::Request,
     ) -> Result<crate::browser_bridge::Reply, String> {
-        use crate::browser_bridge::{matches_site, origin, BrowserEntry, Credential, Reply};
+        use crate::browser_bridge::{
+            matches_site, origin, page_key, site_rank, BrowserEntry, Credential, Reply,
+        };
         let site = origin(&request.origin)?;
+        let page = page_key(request.page_url.as_deref().unwrap_or(&site), &site)?;
+        if matches!(request.operation.as_str(), "capture" | "save" | "dismiss") {
+            return self.browser_save_request(&request, &site, &page);
+        }
         self.access(|vault| {
-            let entries = vault.list();
+            let mut entries = vault.list();
+            let preferred = vault.browser_preference(&page);
+            entries.sort_by_key(|e| {
+                (
+                    std::cmp::Reverse(Some(e.id) == preferred),
+                    std::cmp::Reverse(site_rank(&e.url, &page)),
+                    e.id,
+                )
+            });
             match request.operation.as_str() {
                 "list" => Ok(Reply {
                     entries: Some(
@@ -234,14 +268,193 @@ impl VaultService {
                         ..Reply::default()
                     })
                 }
+                "remember" => {
+                    let entry = entries
+                        .iter()
+                        .find(|e| Some(e.id) == request.id && matches_site(&e.url, &site))
+                        .ok_or("此账号与当前网站不匹配。")?;
+                    vault.remember_browser_account(&page, entry.id)?;
+                    Ok(Reply::default())
+                }
                 _ => Err("不支持的浏览器请求。".into()),
             }
+        })
+    }
+    fn browser_save_request(
+        &self,
+        request: &crate::browser_protocol::Request,
+        site: &str,
+        page: &str,
+    ) -> Result<crate::browser_bridge::Reply, String> {
+        use crate::browser_bridge::{matches_site, site_rank, BrowserEntry, Reply, SaveProposal};
+        let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
+        if Self::expired(&state) {
+            state.vault = None;
+            state.browser_pending.clear();
+            state.epoch = state.epoch.wrapping_add(1);
+        }
+        state
+            .browser_pending
+            .retain(|p| p.deadline > std::time::Instant::now());
+        if state.busy {
+            return Err("密码库正在处理其他操作，请稍候。".into());
+        }
+        let vault = state
+            .vault
+            .as_ref()
+            .ok_or("密码库已锁定，请解锁后重新提交表单。")?;
+        if request.operation == "capture" {
+            let credential = request.credential.as_ref().ok_or("没有可保存的账号。")?;
+            if (credential.user.is_empty() && !credential.password_change)
+                || credential.user.len() > 1024
+                || credential.password.is_empty()
+                || credential.password.len() > 4096
+            {
+                return Err("账号或密码长度无效。".into());
+            }
+            // Only an exact host can be updated; sibling sites remain independent.
+            let mut candidates: Vec<_> = vault
+                .list()
+                .into_iter()
+                .filter(|e| {
+                    matches_site(&e.url, site)
+                        && site_rank(&e.url, page).0 > 0
+                        && (e.user == credential.user
+                            || (credential.password_change && credential.user.is_empty()))
+                })
+                .collect();
+            candidates.sort_by_key(|e| std::cmp::Reverse(site_rank(&e.url, page)));
+            if credential.user.is_empty() && candidates.is_empty() {
+                return Err("无法确定改密账号，请从插件手动保存并输入用户名。".into());
+            }
+            let mut snapshots = vec![];
+            for e in &candidates {
+                let secret = vault.secret(e.id)?;
+                if secret.as_str() == credential.password
+                    && (!credential.user.is_empty() || candidates.len() == 1)
+                {
+                    state
+                        .browser_pending
+                        .retain(|p| p.page != page || p.user != credential.user);
+                    return Ok(Reply {
+                        unchanged: Some(true),
+                        ..Reply::default()
+                    });
+                }
+                snapshots.push((e.clone(), secret));
+            }
+            use rand_core::RngCore;
+            let mut bytes = [0u8; 32];
+            rand_core::OsRng
+                .try_fill_bytes(&mut bytes)
+                .map_err(|_| "系统随机数不可用。")?;
+            let ticket: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+            let proposal = SaveProposal {
+                ticket: ticket.clone(),
+                site: site.into(),
+                user: credential.user.clone(),
+                entries: candidates
+                    .iter()
+                    .map(|e| BrowserEntry {
+                        id: e.id,
+                        name: e.name.clone(),
+                        user: e.user.clone(),
+                        site: crate::browser_bridge::site_label(&e.url),
+                    })
+                    .collect(),
+                can_create: candidates.is_empty(),
+            };
+            state
+                .browser_pending
+                .retain(|p| p.page != page || p.user != credential.user);
+            if state.browser_pending.len() >= 16 {
+                state.browser_pending.remove(0);
+            }
+            state.browser_pending.push(BrowserPending {
+                ticket,
+                site: site.into(),
+                page: page.into(),
+                user: credential.user.clone(),
+                password: Zeroizing::new(credential.password.clone()),
+                candidates: snapshots,
+                deadline: std::time::Instant::now() + Duration::from_secs(120),
+            });
+            // Detection never extends the idle session; only explicit actions do.
+            return Ok(Reply {
+                proposal: Some(proposal),
+                ..Reply::default()
+            });
+        }
+        let ticket = request.ticket.as_deref().ok_or("保存请求已失效。")?;
+        let index = state
+            .browser_pending
+            .iter()
+            .position(|p| p.ticket == ticket && p.site == site)
+            .ok_or("保存请求已失效，请重新提交表单。")?;
+        if request.operation == "dismiss" {
+            state.browser_pending.remove(index);
+            return Ok(Reply::default());
+        }
+        let pending = state.browser_pending.remove(index);
+        let vault = state.vault.as_mut().ok_or("密码库已锁定。")?;
+        if let Some(id) = request.id {
+            let (old, secret) = pending
+                .candidates
+                .iter()
+                .find(|(e, _)| e.id == id)
+                .ok_or("请选择提示中的账号。")?;
+            let current = vault
+                .list()
+                .into_iter()
+                .find(|e| e.id == id)
+                .ok_or("账号已变化，请重新提交。")?;
+            if current.url != old.url
+                || current.user != old.user
+                || vault.secret(id)?.as_str() != secret.as_str()
+            {
+                return Err("账号已变化，请重新提交，避免覆盖新密码。".into());
+            }
+            vault.upsert(current, Some(&pending.password))?;
+        } else {
+            if !pending.candidates.is_empty()
+                || vault.list().iter().any(|e| {
+                    e.user == pending.user
+                        && matches_site(&e.url, &pending.site)
+                        && site_rank(&e.url, &pending.page).0 > 0
+                })
+            {
+                return Err("已有相同网站和账号，请重新提交并选择更新。".into());
+            }
+            let name = url::Url::parse(&pending.site)
+                .map_err(|_| "网站无效。")?
+                .host_str()
+                .unwrap_or_default()
+                .to_string();
+            vault.upsert(
+                Metadata {
+                    id: 0,
+                    name,
+                    user: pending.user,
+                    url: pending.page,
+                    category: "未分类".into(),
+                    icon: "◇".into(),
+                    favorite: false,
+                    note: String::new(),
+                },
+                Some(&pending.password),
+            )?;
+        }
+        state.last = SystemTime::now();
+        Ok(Reply {
+            saved: Some(true),
+            ..Reply::default()
         })
     }
     fn begin_sensitive(&self, allow_new: bool) -> Result<u64, String> {
         let mut state = self.state.lock().map_err(|_| "密码库服务不可用。")?;
         if Self::expired(&state) {
             state.vault = None;
+            state.browser_pending.clear();
             state.import_file = None;
             state.csv_import = None;
             state.epoch = state.epoch.wrapping_add(1);
@@ -796,6 +1009,260 @@ pub fn vault_copy(window: tauri::WebviewWindow, id: u32, field: String) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn browser_request(
+        operation: &str,
+        page: &str,
+        id: Option<u32>,
+    ) -> crate::browser_protocol::Request {
+        crate::browser_protocol::Request {
+            operation: operation.into(),
+            origin: crate::browser_bridge::origin(page).unwrap(),
+            page_url: Some(page.into()),
+            id,
+            ..Default::default()
+        }
+    }
+    fn capture(
+        service: &VaultService,
+        page: &str,
+        user: &str,
+        password: &str,
+        change: bool,
+    ) -> crate::browser_bridge::Reply {
+        let mut request = browser_request("capture", page, None);
+        request.credential = Some(crate::browser_protocol::SubmittedCredential {
+            user: user.into(),
+            password: password.into(),
+            password_change: change,
+        });
+        service.browser_request(request).unwrap()
+    }
+    fn confirm(
+        service: &VaultService,
+        page: &str,
+        ticket: &str,
+        id: Option<u32>,
+    ) -> Result<crate::browser_bridge::Reply, String> {
+        let mut request = browser_request("save", page, id);
+        request.ticket = Some(ticket.into());
+        service.browser_request(request)
+    }
+    #[test]
+    fn browser_save_requires_confirmation_and_updates_only_selected_unchanged_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = VaultService::new(dir.path().join("fictional.lime"));
+        let master = "fictional-master-only";
+        service
+            .authenticate(Zeroizing::new(master.into()), true, false)
+            .unwrap();
+        let page = "https://login.example.com/login/?token=fictional#secret";
+        let pending = capture(&service, page, "demo", "fictional-first", false)
+            .proposal
+            .unwrap();
+        assert!(pending.can_create);
+        assert!(service.access(|v| Ok(v.list().is_empty())).unwrap());
+        assert!(serde_json::to_string(&pending)
+            .unwrap()
+            .find("fictional-first")
+            .is_none());
+        assert!(confirm(
+            &service,
+            "https://evil.example.com/login/",
+            &pending.ticket,
+            None
+        )
+        .is_err());
+        assert_eq!(
+            confirm(&service, page, &pending.ticket, None)
+                .unwrap()
+                .saved,
+            Some(true)
+        );
+        assert!(confirm(&service, page, &pending.ticket, None).is_err());
+        let entry = service.access(|v| Ok(v.list()[0].clone())).unwrap();
+        assert_eq!(entry.url, "https://login.example.com/login/");
+        assert!(capture(&service, page, "demo", "fictional-first", false)
+            .unchanged
+            .unwrap());
+        service
+            .access(|v| {
+                let mut e = entry.clone();
+                e.note = "keep note".into();
+                e.category = "工作".into();
+                e.favorite = true;
+                v.upsert(e, None).map(|_| ())
+            })
+            .unwrap();
+        let pending = capture(&service, page, "demo", "fictional-second", false)
+            .proposal
+            .unwrap();
+        assert!(!pending.can_create);
+        assert!(confirm(&service, page, &pending.ticket, Some(entry.id))
+            .unwrap()
+            .saved
+            .unwrap());
+        service
+            .access(|v| {
+                let e = v.list()[0].clone();
+                assert_eq!(e.note, "keep note");
+                assert_eq!(e.category, "工作");
+                assert!(e.favorite);
+                assert_eq!(v.secret(e.id)?.as_str(), "fictional-second");
+                Ok(())
+            })
+            .unwrap();
+        let pending = capture(&service, page, "demo", "fictional-stale", false)
+            .proposal
+            .unwrap();
+        service
+            .access(|v| {
+                let e = v.list()[0].clone();
+                v.upsert(e, Some("fictional-newer")).map(|_| ())
+            })
+            .unwrap();
+        assert!(confirm(&service, page, &pending.ticket, Some(entry.id)).is_err());
+        let pending = capture(&service, page, "", "fictional-change", true)
+            .proposal
+            .unwrap();
+        assert_eq!(pending.entries.len(), 1);
+        assert!(confirm(&service, page, &pending.ticket, Some(entry.id))
+            .unwrap()
+            .saved
+            .unwrap());
+        let sibling = capture(
+            &service,
+            "https://portal.example.com/login",
+            "demo",
+            "fictional-sibling",
+            false,
+        )
+        .proposal
+        .unwrap();
+        assert!(sibling.can_create);
+        assert!(confirm(
+            &service,
+            "https://portal.example.com/login",
+            &sibling.ticket,
+            None
+        )
+        .unwrap()
+        .saved
+        .unwrap());
+        service.lock();
+        service
+            .authenticate(Zeroizing::new(master.into()), false, false)
+            .unwrap();
+        assert_eq!(service.access(|v| Ok(v.list().len())).unwrap(), 2);
+    }
+    #[test]
+    fn browser_proposals_expire_cancel_on_lock_and_never_extend_idle_without_confirmation() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = VaultService::new(dir.path().join("fictional.lime"));
+        let master = "fictional-master-only";
+        service
+            .authenticate(Zeroizing::new(master.into()), true, false)
+            .unwrap();
+        let page = "https://example.com/login";
+        let before = service.state.lock().unwrap().last;
+        let first = capture(&service, page, "demo", "fictional-first", false)
+            .proposal
+            .unwrap();
+        assert_eq!(service.state.lock().unwrap().last, before);
+        let second = capture(&service, page, "demo", "fictional-second", false)
+            .proposal
+            .unwrap();
+        assert!(confirm(&service, page, &first.ticket, None).is_err());
+        service.state.lock().unwrap().browser_pending[0].deadline =
+            std::time::Instant::now() - Duration::from_secs(1);
+        assert!(confirm(&service, page, &second.ticket, None).is_err());
+        let pending = capture(&service, page, "demo", "fictional-third", false)
+            .proposal
+            .unwrap();
+        service.lock();
+        service
+            .authenticate(Zeroizing::new(master.into()), false, false)
+            .unwrap();
+        assert!(confirm(&service, page, &pending.ticket, None).is_err());
+        let pending = capture(&service, page, "demo", "fictional-fourth", false)
+            .proposal
+            .unwrap();
+        {
+            let mut s = service.state.lock().unwrap();
+            s.last = SystemTime::now() - Duration::from_secs(600);
+        }
+        assert!(service
+            .browser_request(browser_request("list", page, None))
+            .is_err());
+        service
+            .authenticate(Zeroizing::new(master.into()), false, false)
+            .unwrap();
+        assert!(confirm(&service, page, &pending.ticket, None).is_err());
+        assert!(service.access(|v| Ok(v.list().is_empty())).unwrap());
+    }
+    #[test]
+    fn browser_ranks_current_subdomain_and_path_then_remembers_explicit_selection_across_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = VaultService::new(dir.path().join("fictional.lime"));
+        let master = "fictional-master-only";
+        service
+            .authenticate(Zeroizing::new(master.into()), true, false)
+            .unwrap();
+        let rows = crate::browser_csv::parse(b"url,username,password\nhttps://portal.wit.edu.cn/login,portal,fictional1\nhttps://iam.wit.edu.cn/other,other,fictional2\nhttps://iam.wit.edu.cn/login,iam,fictional3\nhttps://iam.wit.edu.cn/login/child,child,fictional4\nhttps://evil.edu.cn/login,evil,fictional5\n").unwrap();
+        service.access(|v| v.import_csv(&rows)).unwrap();
+        let page = "https://iam.wit.edu.cn/login/#id=fictional";
+        let list = || {
+            service
+                .browser_request(browser_request("list", page, None))
+                .unwrap()
+                .entries
+                .unwrap()
+                .into_iter()
+                .map(|e| e.id)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(list(), vec![3, 2, 4, 1]);
+        assert_eq!(
+            service
+                .browser_request(browser_request(
+                    "list",
+                    "https://iam.wit.edu.cn/login/child/nested",
+                    None
+                ))
+                .unwrap()
+                .entries
+                .unwrap()[0]
+                .id,
+            4
+        );
+        service
+            .browser_request(browser_request("remember", page, Some(1)))
+            .unwrap();
+        assert_eq!(list()[0], 1);
+        assert!(service
+            .browser_request(browser_request("remember", page, Some(5)))
+            .is_err());
+        let mut invalid = browser_request("list", page, None);
+        invalid.page_url = Some("https://evil.edu.cn/login".into());
+        assert!(service.browser_request(invalid).is_err());
+        service.lock();
+        service
+            .authenticate(Zeroizing::new(master.into()), false, false)
+            .unwrap();
+        assert_eq!(list()[0], 1);
+        assert_eq!(
+            service
+                .browser_request(browser_request(
+                    "list",
+                    "https://iam.wit.edu.cn/other",
+                    None
+                ))
+                .unwrap()
+                .entries
+                .unwrap()[0]
+                .id,
+            2
+        );
+    }
     #[test]
     fn quick_save_rejects_locked_expired_busy_and_previous_sessions() {
         let dir = tempfile::tempdir().unwrap();
@@ -878,6 +1345,7 @@ mod tests {
             operation: operation.into(),
             origin: origin.into(),
             id,
+            ..Request::default()
         };
         assert!(service
             .browser_request(request("list", "https://example.invalid", None))
