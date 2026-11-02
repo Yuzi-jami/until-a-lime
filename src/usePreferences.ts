@@ -76,7 +76,9 @@ export function useFontScalePreference() {
   );
   useEffect(() => {
     document.body.style.setProperty("--lime-font-scale", String(fontScale));
-    const elements = Array.from(document.body.querySelectorAll<HTMLElement>("*"));
+    const elements = Array.from(
+      document.body.querySelectorAll<HTMLElement>("*"),
+    );
     const originals = new Map<HTMLElement, string>();
     const apply = (element: HTMLElement) => {
       if (originals.has(element)) return;
@@ -84,11 +86,15 @@ export function useFontScalePreference() {
       if (!computed.endsWith("px")) return;
       originals.set(element, element.style.fontSize);
       const base = Number.parseFloat(computed);
-      if (Number.isFinite(base)) element.style.fontSize = `${base * fontScale}px`;
+      if (Number.isFinite(base))
+        element.style.fontSize = `${base * fontScale}px`;
     };
     for (const element of elements) apply(element);
     const observer = new MutationObserver(() => {
-      for (const element of Array.from(document.body.querySelectorAll<HTMLElement>("*"))) apply(element);
+      for (const element of Array.from(
+        document.body.querySelectorAll<HTMLElement>("*"),
+      ))
+        apply(element);
     });
     observer.observe(document.body, { childList: true, subtree: true });
     return () => {
@@ -110,7 +116,9 @@ export function useFontScalePreference() {
 }
 
 export function useProfileNamePreference() {
-  const [profileName, setProfileName] = useState(() => readPreference("lime.profileName") || "一位酸橙收藏家");
+  const [profileName, setProfileName] = useState(
+    () => readPreference("lime.profileName") || "一位酸橙收藏家",
+  );
   const changeProfileName = (next: string) => {
     const normalized = next.trim().slice(0, 32) || "一位酸橙收藏家";
     setProfileName(normalized);
@@ -124,8 +132,8 @@ export function useProfileNamePreference() {
 }
 
 export function useProfileSubtitlePreference(defaultValue: string) {
-  const [profileSubtitle, setProfileSubtitle] = useState(() =>
-    readPreference("lime.profileSubtitle") || defaultValue,
+  const [profileSubtitle, setProfileSubtitle] = useState(
+    () => readPreference("lime.profileSubtitle") || defaultValue,
   );
   const changeProfileSubtitle = (next: string) => {
     const normalized = next.trim().slice(0, 48) || defaultValue;

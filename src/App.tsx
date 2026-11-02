@@ -4,7 +4,14 @@ import PasswordStatistics, {
   type Strength,
 } from "./VaultInsights";
 import SettingsPanel from "./SettingsPanel";
-import { useTheme, useAutoLockPreference, useFontScalePreference, useProfileNamePreference, useProfileSubtitlePreference, useSidebarWidthPreference } from "./usePreferences";
+import {
+  useTheme,
+  useAutoLockPreference,
+  useFontScalePreference,
+  useProfileNamePreference,
+  useProfileSubtitlePreference,
+  useSidebarWidthPreference,
+} from "./usePreferences";
 import { useIdleLock } from "./useIdleLock";
 import {
   restoreEntry,
@@ -86,23 +93,30 @@ export default function App({
   );
   const { profileName, changeProfileName } = useProfileNamePreference();
   const defaultProfileSubtitle = `${runtime} · ${persistent ? "加密密码库" : "演示数据"}`;
-  const { profileSubtitle, changeProfileSubtitle } = useProfileSubtitlePreference(defaultProfileSubtitle);
+  const { profileSubtitle, changeProfileSubtitle } =
+    useProfileSubtitlePreference(defaultProfileSubtitle);
   const { sidebarWidth, changeSidebarWidth } = useSidebarWidthPreference();
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState(profileName);
-  const [profileSubtitleDraft, setProfileSubtitleDraft] = useState(profileSubtitle);
+  const [profileSubtitleDraft, setProfileSubtitleDraft] =
+    useState(profileSubtitle);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [resizingSidebar, setResizingSidebar] = useState(false);
-  const onSidebarResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    resizeRef.current = { startX: event.clientX, startWidth: sidebarWidth };
-    setResizingSidebar(true);
-  }, [sidebarWidth]);
+  const onSidebarResize = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      resizeRef.current = { startX: event.clientX, startWidth: sidebarWidth };
+      setResizingSidebar(true);
+    },
+    [sidebarWidth],
+  );
   useEffect(() => {
     if (!resizingSidebar) return;
     const move = (event: globalThis.PointerEvent) => {
       if (!resizeRef.current) return;
-      changeSidebarWidth(resizeRef.current.startWidth + event.clientX - resizeRef.current.startX);
+      changeSidebarWidth(
+        resizeRef.current.startWidth + event.clientX - resizeRef.current.startX,
+      );
     };
     const stop = () => {
       resizeRef.current = null;
@@ -519,9 +533,18 @@ export default function App({
     );
   return (
     <>
-      <div className="app workspace" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
+      <div
+        className="app workspace"
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+      >
         <aside className="sidebar">
-          <div className="sidebar-resize-handle" role="separator" aria-label="调整侧边栏宽度" aria-orientation="vertical" onPointerDown={onSidebarResize} />
+          <div
+            className="sidebar-resize-handle"
+            role="separator"
+            aria-label="调整侧边栏宽度"
+            aria-orientation="vertical"
+            onPointerDown={onSidebarResize}
+          />
           <a
             className="brand"
             href="#"
@@ -598,7 +621,10 @@ export default function App({
               ◐ <span>切换深浅色</span>
             </button>
             <button onClick={lock}>
-              <svg className="lock-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12v10H6z" /></svg><span>锁定收藏室</span>
+              <svg className="lock-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12v10H6z" />
+              </svg>
+              <span>锁定收藏室</span>
             </button>
             <div className="profile">
               <span className="avatar">L</span>
@@ -606,7 +632,17 @@ export default function App({
                 <strong>{profileName}</strong>
                 <small>{profileSubtitle}</small>
               </div>
-              <button className="profile-edit-button" aria-label="编辑账户信息" onClick={() => { setProfileDraft(profileName); setProfileSubtitleDraft(profileSubtitle); setEditingProfile(true); }}>✎</button>
+              <button
+                className="profile-edit-button"
+                aria-label="编辑账户信息"
+                onClick={() => {
+                  setProfileDraft(profileName);
+                  setProfileSubtitleDraft(profileSubtitle);
+                  setEditingProfile(true);
+                }}
+              >
+                ✎
+              </button>
               <span className="dot" />
             </div>
           </div>
@@ -1045,10 +1081,7 @@ export default function App({
         </Modal>
       )}
       {editingProfile && (
-        <Modal
-          title="编辑账户信息"
-          onClose={() => setEditingProfile(false)}
-        >
+        <Modal title="编辑账户信息" onClose={() => setEditingProfile(false)}>
           <form
             className="profile-dialog-form"
             onSubmit={(event) => {
@@ -1062,12 +1095,31 @@ export default function App({
             <h2>编辑账户信息</h2>
             <p>调整左侧账户卡片中显示的名称和说明。</p>
             <label htmlFor="profile-name">账户名称</label>
-            <input id="profile-name" value={profileDraft} maxLength={32} onChange={(event) => setProfileDraft(event.target.value)} autoFocus />
+            <input
+              id="profile-name"
+              value={profileDraft}
+              maxLength={32}
+              onChange={(event) => setProfileDraft(event.target.value)}
+              autoFocus
+            />
             <label htmlFor="profile-subtitle">账户说明</label>
-            <input id="profile-subtitle" value={profileSubtitleDraft} maxLength={48} onChange={(event) => setProfileSubtitleDraft(event.target.value)} />
+            <input
+              id="profile-subtitle"
+              value={profileSubtitleDraft}
+              maxLength={48}
+              onChange={(event) => setProfileSubtitleDraft(event.target.value)}
+            />
             <div className="profile-dialog-actions">
-              <button type="button" className="secondary" onClick={() => setEditingProfile(false)}>取消</button>
-              <button type="submit" className="primary">保存信息</button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setEditingProfile(false)}
+              >
+                取消
+              </button>
+              <button type="submit" className="primary">
+                保存信息
+              </button>
             </div>
           </form>
         </Modal>

@@ -244,7 +244,7 @@ export default function Floating() {
               ? "等待已结束，请重新选择账号。"
               : payload === "unavailable"
                 ? "快捷键监听启动失败，请重新选择账号。"
-              : "连续填写已取消。",
+                : "连续填写已取消。",
         );
       }),
     );

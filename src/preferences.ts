@@ -19,7 +19,9 @@ export function parseAutoLock(value: string | null): AutoLockMinutes {
 export function parseFontScale(value: string | null): FontScale {
   if (value === null || !/^\d+(?:\.\d+)?$/.test(value)) return 1;
   const scale = Number(value);
-  return Number.isFinite(scale) && scale >= MIN_FONT_SCALE && scale <= MAX_FONT_SCALE
+  return Number.isFinite(scale) &&
+    scale >= MIN_FONT_SCALE &&
+    scale <= MAX_FONT_SCALE
     ? Math.round(scale * 20) / 20
     : 1;
 }

@@ -101,13 +101,15 @@ pub fn quick_paste_arm(window: tauri::WebviewWindow, id: u32) -> Result<&'static
         let worker_flag = flag.clone();
         std::thread::spawn(move || {
             run_tab_wait(
-                app,
-                service_for_worker,
-                clipboard,
-                epoch,
-                id,
+                TabWaitContext {
+                    app,
+                    service: service_for_worker,
+                    clipboard,
+                    epoch,
+                    id,
+                    quick_paste,
+                },
                 worker_flag,
-                quick_paste,
                 ready_tx,
             )
         });
@@ -171,14 +173,19 @@ unsafe extern "system" fn keyboard_hook(
 }
 
 #[cfg(windows)]
-fn run_tab_wait(
+struct TabWaitContext {
     app: tauri::AppHandle,
     service: crate::vault_service::VaultService,
     clipboard: crate::clipboard::ClipboardService,
     epoch: u64,
     id: u32,
-    active: Arc<AtomicBool>,
     quick_paste: QuickPaste,
+}
+
+#[cfg(windows)]
+fn run_tab_wait(
+    context: TabWaitContext,
+    active: Arc<AtomicBool>,
     ready: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -190,9 +197,11 @@ fn run_tab_wait(
         unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), std::ptr::null_mut(), 0) };
     if hook.is_null() {
         active.store(false, Ordering::SeqCst);
-        quick_paste.finish(&active);
+        context.quick_paste.finish(&active);
         let _ = ready.send(Err("快捷键监听启动失败，请重试。".into()));
-        let _ = app.emit_to("floating", "lime-quick-paste", "unavailable");
+        let _ = context
+            .app
+            .emit_to("floating", "lime-quick-paste", "unavailable");
         return;
     }
     let _ = ready.send(Ok(()));
@@ -213,24 +222,30 @@ fn run_tab_wait(
                 unsafe {
                     UnhookWindowsHookEx(hook);
                 }
-                quick_paste.finish(&active);
-                let _ = app.emit_to("floating", "lime-quick-paste", "cancelled");
+                context.quick_paste.finish(&active);
+                let _ = context
+                    .app
+                    .emit_to("floating", "lime-quick-paste", "cancelled");
                 return;
             }
             1 => {
-                let result = service
-                    .with_floating_field(epoch, id, "password", |value| clipboard.copy_text(value));
+                let result = context.service.with_floating_field(
+                    context.epoch,
+                    context.id,
+                    "password",
+                    |value| context.clipboard.copy_text(value),
+                );
                 active.store(false, Ordering::SeqCst);
                 unsafe {
                     UnhookWindowsHookEx(hook);
                 }
-                quick_paste.finish(&active);
+                context.quick_paste.finish(&active);
                 let outcome = if result.is_ok() {
                     "password-ready"
                 } else {
                     "expired"
                 };
-                let _ = app.emit_to("floating", "lime-quick-paste", outcome);
+                let _ = context.app.emit_to("floating", "lime-quick-paste", outcome);
                 return;
             }
             _ => {}
@@ -241,9 +256,11 @@ fn run_tab_wait(
     unsafe {
         UnhookWindowsHookEx(hook);
     }
-    quick_paste.finish(&active);
+    context.quick_paste.finish(&active);
     KEY_EVENT.store(0, Ordering::SeqCst);
-    let _ = app.emit_to("floating", "lime-quick-paste", "expired");
+    let _ = context
+        .app
+        .emit_to("floating", "lime-quick-paste", "expired");
 }
 
 #[cfg(test)]

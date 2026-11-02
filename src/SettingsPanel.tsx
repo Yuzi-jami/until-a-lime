@@ -1,4 +1,8 @@
-import type { AutoLockMinutes, FontScale, ThemePreference } from "./preferences";
+import type {
+  AutoLockMinutes,
+  FontScale,
+  ThemePreference,
+} from "./preferences";
 import AccessSettings from "./AccessSettings";
 import BrowserSetup from "./BrowserSetup";
 import DataSettings from "./DataSettings";
