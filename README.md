@@ -36,3 +36,7 @@ npm run tauri -- build
 安装包位于 `target/release/bundle/nsis/`。开发运行和测试见 [贡献指南](CONTRIBUTING.md)。
 
 [项目结构](docs/architecture.md) · [密码库设计](docs/vault.md) · [后续计划](docs/roadmap.md)
+
+## 许可证
+
+[MIT](LICENSE)
