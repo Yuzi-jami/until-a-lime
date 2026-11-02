@@ -1,0 +1,15 @@
+name: 功能建议
+description: 分享想改善的使用体验
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 描述使用场景，以及现在操作起来不方便的地方。
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你的想法
+      description: 可以附上参考或简单示意。

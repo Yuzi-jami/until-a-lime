@@ -1,11 +1,31 @@
-# Windows 安装构建
+# 安装与使用
 
-2026-10-23 当前版本为桌面 1.1.0 / 扩展 0.3.0。安装包在 [v1.1.0](https://github.com/Yuzi-jami/until-a-lime/releases/tag/v1.1.0) 提供。升级前导出加密备份、从托盘退出旧实例；安装或启动新版后，在扩展管理页重新加载扩展，确认 0.3.0，并刷新网页。新增的加密网站偏好不被 1.0 识别，首次记忆账号后继续使用新版，勿直接降级。完整步骤见 [1.1 更新说明](release-1.1.md)。
+## 安装
 
-下载 `Until-a-lime_1.1.0_x64-setup.exe`，双击安装；同页 `SHA256SUMS.txt` 提供校验值，可用 `Get-FileHash -Algorithm SHA256` 核对。安装后进入收藏室设置主密码；浏览器扩展按 [扩展说明](browser-extension.md) 准备并确认加载。历史 [v1.0.0](https://github.com/Yuzi-jami/until-a-lime/releases/tag/v1.0.0) 保持原样。
+在 [Releases](https://github.com/Yuzi-jami/until-a-lime/releases/latest) 下载 `Until-a-lime_*_x64-setup.exe` 并安装。支持 Windows 10 / 11 x64，需要 WebView2。
 
-选择 NSIS 单一目标，currentUser 安装，无需默认提权；identifier 保持 dev.untilalime.desktop，版本 1.1.0。npm.cmd run tauri -- build 生成 target/release/bundle/nsis 下安装包。图标使用仓库 icons/icon.ico；素材权利核验仍待完成。沿用原 AppData 路径，不创建新库或搬迁旧库。Debug 和 Release 使用同一密码库与单实例标识，先从托盘退出旧进程再启动新版。
+首次打开收藏室时设置主密码。主密码无法找回，请妥善保管。
 
-WebView2 配置 downloadBootstrapper：缺少运行时时需联网下载微软引导程序。离线机器需预装 WebView2。安装包未配置签名，可能出现 SmartScreen 提示。首发沿用仓库现有可见性，未完成独立安全审计。
+## 桌面填写
 
-在单独 Windows 测试用户/虚拟机检查安装→启动→创建虚构库→同版本覆盖安装→重开核对→卸载。默认不要删除 AppData 密码库；本项目不添加删除用户库的卸载钩子。实际保留行为需安装测试证明，不能仅从配置认定通过。不要卸载日常实例。
+将鼠标移到桌面橙子上，选择“寻找账号”，搜索并点击要使用的账号：
+
+1. 回到目标应用，按 Ctrl + V 粘贴用户名。
+2. 在 20 秒内按 Tab 切到密码框。
+3. 再按 Ctrl + V 粘贴密码。
+
+Esc 可以取消这次连续粘贴。没有用户名的账号会直接复制密码。此流程适用于允许粘贴的输入框。
+
+## 后台与锁定
+
+关闭主窗口后，应用继续留在托盘。会话有效时，再次打开收藏室无需重复输入主密码。
+
+闲置锁定时长可在设置中调整。手动锁定、闲置到期或从托盘退出后，下次访问密码库需要重新解锁。
+
+## 备份与升级
+
+在“设置 → 密码库与备份”中导出加密备份。数据文件位于 `%APPDATA%\dev.untilalime.desktop\vault.lime`。
+
+升级前导出一份备份，从托盘退出旧版，再安装新版。浏览器扩展需要重新加载一次，步骤见 [扩展说明](browser-extension.md)。
+
+从 1.0 升级到 1.1 后，保存网站账号偏好的密码库不能直接用 1.0 打开。需要回退时，使用升级前导出的备份。

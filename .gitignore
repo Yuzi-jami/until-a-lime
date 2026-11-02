@@ -2,6 +2,7 @@
 /node_modules/
 /dist/
 /.tools/
+/.local-notes/
 /rustup-init.exe
 *.log
 *.vault
@@ -15,4 +16,5 @@
 /.acceptance/
 
 /src-tauri/binaries/
+/src-tauri/gen/
 /browser-bridge.json

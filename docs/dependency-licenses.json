@@ -1,6 +1,6 @@
 {
   "date": "2026-10-07",
-  "scope": "Third-party Windows Cargo dependencies and all npm lock entries (including optional platform packages); license texts not audited",
+  "scope": "Third-party Windows Cargo dependencies and all npm lock entries (including optional platform packages)",
   "packages": [
     {
       "ecosystem": "cargo",

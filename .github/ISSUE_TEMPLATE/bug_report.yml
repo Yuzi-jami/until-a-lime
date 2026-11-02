@@ -1,0 +1,22 @@
+name: 问题反馈
+description: 报告使用中遇到的问题
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 应用与系统版本
+      placeholder: 酸橙 1.1.0 / Windows 11 / Edge 版本（如涉及浏览器）
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 如何复现
+      description: 写下操作步骤、预期结果和实际发生的情况。
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或补充信息
+      description: 截图请遮盖账号等个人信息，复现时使用示例密码。
