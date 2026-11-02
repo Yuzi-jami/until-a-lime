@@ -95,7 +95,7 @@
   cursor: default;
 }
 .window-name {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.8px;
 }
 .window-caption {
@@ -126,13 +126,17 @@
   max-width: none;
   min-height: 100%;
   height: 100%;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 224px) minmax(0, 1fr);
 }
 .workspace .sidebar {
   padding: 30px 18px 18px;
   background: var(--surface);
   overflow-y: auto;
+  position: relative;
 }
+.sidebar-resize-handle { position:absolute; top:0; right:-4px; bottom:0; width:8px; cursor:col-resize; z-index:5; }
+.sidebar-resize-handle::after { content:""; position:absolute; top:22%; bottom:22%; left:3px; width:2px; border-radius:2px; background:transparent; transition:background .15s; }
+.sidebar-resize-handle:hover::after, .sidebar-resize-handle:active::after { background:var(--strong); }
 .workspace .brand {
   font-size: 15px;
   gap: 10px;
@@ -147,10 +151,10 @@
 }
 .workspace .edition {
   margin: 34px 12px 18px;
-  font-size: 9px;
+  font-size: 10px;
 }
 .workspace .nav {
-  font-size: 12px;
+  font-size: 14px;
   min-height: 44px;
   gap: 11px;
   border-radius: 9px;
@@ -162,16 +166,16 @@
 }
 .workspace .nav-label {
   margin: 28px 14px 12px;
-  font-size: 9px;
+  font-size: 10px;
 }
 .workspace .sidebar-bottom {
   padding-top: 36px;
 }
 .workspace .profile {
-  font-size: 10px;
+  font-size: 12px;
 }
 .workspace .profile small {
-  font-size: 8px;
+  font-size: 10px;
 }
 .workspace .sidebar-bottom > button {
   font-size: 16px;
@@ -647,7 +651,7 @@
 }
 @media (min-width: 1500px) {
   .workspace {
-    grid-template-columns: 248px 1fr;
+    grid-template-columns: var(--sidebar-width, 248px) minmax(0, 1fr);
   }
   .workspace .collection {
     grid-template-columns: 360px minmax(0, 1fr);
@@ -668,7 +672,7 @@
 }
 @media (max-width: 1100px) {
   .workspace {
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 190px) minmax(0, 1fr);
   }
   .workspace .sidebar {
     padding: 24px 12px;
@@ -715,7 +719,7 @@
 }
 @media (max-width: 780px) {
   .workspace {
-    grid-template-columns: 168px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 168px) minmax(0, 1fr);
   }
   .workspace .brand {
     font-size: 12px;
@@ -841,3 +845,57 @@
 .settings-custom-lock label { display:grid; gap:6px; font-size:13px; }
 .settings-custom-lock input { width:140px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); }
 .settings-custom-lock small { color:var(--muted); padding-bottom:10px; }
+
+/* Bring compact desktop labels and controls to a comfortable reading size. */
+.workspace .brand small { font-size: 10px; }
+.workspace .topbar { font-size: 13px; }
+.workspace .sidebar-bottom button span { font-size: 12px; }
+.workspace .section-heading h2 { font-size: 23px; }
+.workspace .section-heading h2 small { font-size: 12px; }
+.workspace .section-heading .primary { font-size: 13px; }
+.workspace .search input { font-size: 14px; }
+.workspace .toolbar select { font-size: 12px; }
+.workspace .search kbd { font-size: 10px; }
+.workspace .category-tabs button { font-size: 12px; }
+.workspace .account-copy strong { font-size: 15px; }
+.workspace .account-copy small { font-size: 12px; }
+.workspace .list-footer { font-size: 10px; }
+.workspace .detail-heading small { font-size: 11px; }
+.workspace .field-label { font-size: 13px; }
+.workspace .field { font-size: 14px; }
+.workspace .field button { font-size: 12px; }
+.workspace .note { font-size: 14px; }
+.workspace .page-footer { font-size: 10px; }
+.workspace-page p,
+.workspace-page li,
+.page-intro p { font-size: 14px; }
+.stat-card > span,
+.stat-row > div:first-child { font-size: 14px; }
+.stat-card small { font-size: 12px; }
+.workspace .workspace-page button,
+.workspace .workspace-page input,
+.workspace .workspace-page select,
+.workspace dialog button,
+.workspace dialog input,
+.workspace dialog select { font-size: 14px; }
+.workspace .workspace-page label,
+.workspace dialog label { font-size: 14px; }
+.workspace dialog p { font-size: 14px; }
+
+.settings-font-scale { display:block; margin-top:24px; }
+.settings-font-scale > span { display:block; margin-bottom:8px; }
+.settings-font-scale output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.settings-font-scale input { display:block; width:100%; margin-top:8px; accent-color:var(--strong); }
+.settings-font-scale small { display:block; margin-top:7px; color:var(--muted); }
+.lock-icon { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:-4px; }
+.profile { position:relative; }
+.profile > div { min-width:0; flex:1; }
+.profile-edit-button { background:transparent; color:var(--strong); font-size:13px; padding:4px; }
+.profile-edit-button { flex-shrink:0; }
+.profile-dialog-form h2 { margin:12px 0 8px; font-size:22px; }
+.profile-dialog-form p { margin:0; font-size:12px; }
+.profile-dialog-form label { display:block; margin-top:16px; color:var(--muted); font-size:12px; }
+.profile-dialog-form input { width:100%; padding:9px 11px; margin-top:7px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-size:13px; line-height:1.35; }
+.profile-dialog-actions { display:grid; grid-template-columns:1fr 1fr; align-items:stretch; gap:10px; margin-top:22px; }
+.profile-dialog-actions button { width:100%; height:40px; min-height:40px; margin:0 !important; padding:0 12px; border:1px solid var(--line); border-radius:7px; box-sizing:border-box; font-size:12px; line-height:1; }
+.profile-dialog-actions .secondary { background:var(--paper); }

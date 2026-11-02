@@ -1,4 +1,4 @@
-import type { AutoLockMinutes, ThemePreference } from "./preferences";
+import type { AutoLockMinutes, FontScale, ThemePreference } from "./preferences";
 import AccessSettings from "./AccessSettings";
 import BrowserSetup from "./BrowserSetup";
 import DataSettings from "./DataSettings";
@@ -11,6 +11,8 @@ const lockOptions = [1, 5, 15, 30, 60, 120, 240, 480, 0];
 export default function SettingsPanel({
   theme,
   onTheme,
+  fontScale,
+  onFontScale,
   minutes,
   onMinutes,
   persistent = false,
@@ -18,6 +20,8 @@ export default function SettingsPanel({
 }: {
   theme: ThemePreference;
   onTheme: (theme: ThemePreference) => void;
+  fontScale: FontScale;
+  onFontScale: (scale: FontScale) => void;
   minutes: AutoLockMinutes;
   onMinutes: (minutes: AutoLockMinutes) => void;
   persistent?: boolean;
@@ -58,6 +62,21 @@ export default function SettingsPanel({
             </label>
           ))}
         </div>
+        <label className="settings-font-scale" htmlFor="font-scale">
+          <span>界面字号</span>
+          <output>{Math.round(fontScale * 100)}%</output>
+          <input
+            id="font-scale"
+            type="range"
+            min={0.9}
+            max={1.3}
+            step={0.05}
+            value={fontScale}
+            onChange={(event) => onFontScale(Number(event.target.value))}
+            aria-label="界面字号"
+          />
+          <small>调整文字大小，不改变页面布局。</small>
+        </label>
       </fieldset>
       <label className="settings-lock" htmlFor="auto-lock">
         闲置后锁定

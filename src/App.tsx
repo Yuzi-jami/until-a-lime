@@ -4,7 +4,7 @@ import PasswordStatistics, {
   type Strength,
 } from "./VaultInsights";
 import SettingsPanel from "./SettingsPanel";
-import { useTheme, useAutoLockPreference } from "./usePreferences";
+import { useTheme, useAutoLockPreference, useFontScalePreference, useProfileNamePreference, useProfileSubtitlePreference, useSidebarWidthPreference } from "./usePreferences";
 import { useIdleLock } from "./useIdleLock";
 import {
   restoreEntry,
@@ -28,6 +28,8 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type CSSProperties,
+  type PointerEvent,
 } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -78,6 +80,47 @@ export default function App({
     [toast, setToast] = useState("");
   const { theme, changeTheme, dark } = useTheme();
   const { minutes, changeMinutes } = useAutoLockPreference();
+  const { fontScale, changeFontScale } = useFontScalePreference();
+  const [runtime, setRuntime] = useState(
+    isTauri() ? "桌面连接中" : "浏览器预览",
+  );
+  const { profileName, changeProfileName } = useProfileNamePreference();
+  const defaultProfileSubtitle = `${runtime} · ${persistent ? "加密密码库" : "演示数据"}`;
+  const { profileSubtitle, changeProfileSubtitle } = useProfileSubtitlePreference(defaultProfileSubtitle);
+  const { sidebarWidth, changeSidebarWidth } = useSidebarWidthPreference();
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState(profileName);
+  const [profileSubtitleDraft, setProfileSubtitleDraft] = useState(profileSubtitle);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [resizingSidebar, setResizingSidebar] = useState(false);
+  const onSidebarResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    resizeRef.current = { startX: event.clientX, startWidth: sidebarWidth };
+    setResizingSidebar(true);
+  }, [sidebarWidth]);
+  useEffect(() => {
+    if (!resizingSidebar) return;
+    const move = (event: globalThis.PointerEvent) => {
+      if (!resizeRef.current) return;
+      changeSidebarWidth(resizeRef.current.startWidth + event.clientX - resizeRef.current.startX);
+    };
+    const stop = () => {
+      resizeRef.current = null;
+      setResizingSidebar(false);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+    window.addEventListener("pointercancel", stop, { once: true });
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [resizingSidebar, changeSidebarWidth]);
   const [secret, setSecret] = useState(""),
     [saving, setSaving] = useState(false),
     [operationError, setOperationError] = useState("");
@@ -91,9 +134,6 @@ export default function App({
       secretRequest.current++;
     };
   }, []);
-  const [runtime, setRuntime] = useState(
-    isTauri() ? "桌面连接中" : "浏览器预览",
-  );
   const searchRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(
     Math.max(0, ...initialEntries.map((entry) => entry.id)) + 1,
@@ -479,8 +519,9 @@ export default function App({
     );
   return (
     <>
-      <div className="app workspace">
+      <div className="app workspace" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
         <aside className="sidebar">
+          <div className="sidebar-resize-handle" role="separator" aria-label="调整侧边栏宽度" aria-orientation="vertical" onPointerDown={onSidebarResize} />
           <a
             className="brand"
             href="#"
@@ -557,16 +598,15 @@ export default function App({
               ◐ <span>切换深浅色</span>
             </button>
             <button onClick={lock}>
-              ⌑ <span>锁定收藏室</span>
+              <svg className="lock-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12v10H6z" /></svg><span>锁定收藏室</span>
             </button>
             <div className="profile">
               <span className="avatar">L</span>
               <div>
-                一位酸橙收藏家
-                <small>
-                  {runtime} · {persistent ? "加密密码库" : "演示数据"}
-                </small>
+                <strong>{profileName}</strong>
+                <small>{profileSubtitle}</small>
               </div>
+              <button className="profile-edit-button" aria-label="编辑账户信息" onClick={() => { setProfileDraft(profileName); setProfileSubtitleDraft(profileSubtitle); setEditingProfile(true); }}>✎</button>
               <span className="dot" />
             </div>
           </div>
@@ -615,6 +655,8 @@ export default function App({
                 }}
                 theme={theme}
                 onTheme={changeTheme}
+                fontScale={fontScale}
+                onFontScale={changeFontScale}
                 minutes={minutes}
                 onMinutes={changeMinutes}
                 persistent={persistent}
@@ -965,6 +1007,8 @@ export default function App({
               }}
               theme={theme}
               onTheme={changeTheme}
+              fontScale={fontScale}
+              onFontScale={changeFontScale}
               minutes={minutes}
               onMinutes={changeMinutes}
               persistent={persistent}
@@ -998,6 +1042,34 @@ export default function App({
             </>
           )}
           {dialog.kind === "help" && <UsageGuide />}
+        </Modal>
+      )}
+      {editingProfile && (
+        <Modal
+          title="编辑账户信息"
+          onClose={() => setEditingProfile(false)}
+        >
+          <form
+            className="profile-dialog-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              changeProfileName(profileDraft);
+              changeProfileSubtitle(profileSubtitleDraft);
+              setEditingProfile(false);
+            }}
+          >
+            <div className="eyebrow">PROFILE / 账户信息</div>
+            <h2>编辑账户信息</h2>
+            <p>调整左侧账户卡片中显示的名称和说明。</p>
+            <label htmlFor="profile-name">账户名称</label>
+            <input id="profile-name" value={profileDraft} maxLength={32} onChange={(event) => setProfileDraft(event.target.value)} autoFocus />
+            <label htmlFor="profile-subtitle">账户说明</label>
+            <input id="profile-subtitle" value={profileSubtitleDraft} maxLength={48} onChange={(event) => setProfileSubtitleDraft(event.target.value)} />
+            <div className="profile-dialog-actions">
+              <button type="button" className="secondary" onClick={() => setEditingProfile(false)}>取消</button>
+              <button type="submit" className="primary">保存信息</button>
+            </div>
+          </form>
         </Modal>
       )}
     </>
